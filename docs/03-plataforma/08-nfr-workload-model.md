@@ -55,7 +55,9 @@ No podemos diseñar infraestructura con esa ambigüedad. Este documento la resue
 15 → Loading      (scan + confirm cada 5s)     = 3 TPS
 15 → Counting     (scan + confirm cada 10s)    = 2 TPS
 10 → Receiving    (scan + confirm cada 5s)     = 2 TPS
-30 → Heartbeats   (cada 30s)                   = 8 TPS
+                                         RF ops = ~46 TPS
+
+250 → Heartbeats  (cada 30s)                   = ~8 TPS
 
 Total RF TPS: ~54 TPS
 
@@ -109,7 +111,9 @@ Total system TPS peak: ~130 TPS
 
 ---
 
-## Dimensionamiento Estimado
+## Dimensionamiento Estimado — Initial Capacity Hypothesis
+
+> ⚠️ Estos números son una **hipótesis inicial** pendiente de validación por benchmark. No son sizing definitivo.
 
 ### Para escenario PEAK
 

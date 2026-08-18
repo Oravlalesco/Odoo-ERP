@@ -1,27 +1,29 @@
-# Handling Units — Industrialización de `stock.quant.package` (v1.1)
+# Handling Units — Industrialización de `stock.package` (v1.2)
 
-> Odoo 19 ya posee jerarquía de paquetes, dimensiones, SSCC y peso. No reconstruimos esa base. Industrializamos `stock.quant.package` agregando semántica WMS: ciclo de vida, operaciones, clasificación operacional y trazabilidad.
+> Odoo 19 ya posee jerarquía de paquetes, dimensiones, SSCC y peso. No reconstruimos esa base. Industrializamos `stock.package` agregando semántica WMS: ciclo de vida, operaciones, clasificación operacional y trazabilidad.
+>
+> **v1.2**: Confirmado `stock.package` como nombre correcto (`_name = 'stock.package'` en Odoo 19). La clase Python es `StockPackage`.
 
 ---
 
 ## Contexto
 
-### Cambio principal en v1.1
+### Cambios principales
 
-La documentación v1.0 proponía construir HU "sobre el paquete básico de Odoo" y mencionaba el modelo como `stock.package`.
+La documentación v1.0 proponía construir HU "sobre el paquete básico de Odoo".
 
-**Correcciones**:
+**Confirmación v1.2**:
 
-1. El modelo real en Odoo 19 Community es **`stock.quant.package`** (clase Python `QuantPackage`, tabla `stock_quant_package`)
+1. El modelo real en Odoo 19 es **`stock.package`** (clase Python `StockPackage`, `_name = 'stock.package'`)
 2. Odoo 19 ya posee **mucho más** de lo que documentábamos: jerarquía, dimensiones, peso, tipos de paquete con capacidades
 
-> **ADR-013**: `stock.quant.package` es la base de Handling Units. No crearemos un modelo de HU separado.
+> **ADR-013**: `stock.package` es la base de Handling Units. No crearemos un modelo de HU separado.
 
 ---
 
 ## Lo que Odoo 19 YA posee
 
-### `stock.quant.package`
+### `stock.package`
 
 | Campo | Significado | Ya existe |
 |---|---|---|
@@ -52,7 +54,7 @@ La documentación v1.0 proponía construir HU "sobre el paquete básico de Odoo"
 
 ## Lo que el WMS agrega
 
-### Extensiones a `stock.quant.package`
+### Extensiones a `stock.package`
 
 | Campo nuevo | En inglés | Significado |
 |---|---|---|
@@ -138,7 +140,7 @@ Cada operación genera un registro en `wms.hu.operation` para trazabilidad:
 
 Odoo 19 tiene un campo `valid_sscc` que puede existir como validación, pero la generación y gestión del ciclo de vida de etiquetas GS1 será responsabilidad del módulo WMS.
 
-El `name` de `stock.quant.package` **puede ser el SSCC** cuando el paquete lo requiera.
+El `name` de `stock.package` **puede ser el SSCC** cuando el paquete lo requiera.
 
 ---
 
@@ -148,14 +150,14 @@ El `name` de `stock.quant.package` **puede ser el SSCC** cuando el paquete lo re
 
 | Modelo | Qué reutilizamos |
 |---|---|
-| `stock.quant.package` | **Base completa** de HU: jerarquía, ubicación, propietario, contenido |
+| `stock.package` | **Base completa** de HU: jerarquía, ubicación, propietario, contenido |
 | `stock.package.type` | **Base completa** de tipo de paquete: dimensiones, peso, capacidades |
 
 ### Modelos Extendidos
 
 | Modelo | Extensión |
 |---|---|
-| `stock.quant.package` | Campos: `hu_state`, `hu_class`, `seal_number`, `sscc`, `gtin`, `label_state`, `current_work_id`, `weight_gross`, `weight_net` |
+| `stock.package` | Campos: `hu_state`, `hu_class`, `seal_number`, `sscc`, `gtin`, `label_state`, `current_work_id`, `weight_gross`, `weight_net` |
 
 ### Modelos Nuevos
 
@@ -164,7 +166,7 @@ El `name` de `stock.quant.package` **puede ser el SSCC** cuando el paquete lo re
 | `wms.hu.operation` | Historial de operaciones sobre HU |
 | `wms.sscc.sequence` | Generador de SSCC con GCP configurable |
 
-> **Nota**: Ya **no** se propone `wms.handling.unit` como modelo independiente. La HU ES `stock.quant.package` extendido.
+> **Nota**: Ya **no** se propone `wms.handling.unit` como modelo independiente. La HU ES `stock.package` extendido.
 
 ---
 
@@ -181,4 +183,4 @@ graph LR
 
 ---
 
-*Documento corregido en v1.1. Cambios principales: corregido nombre del modelo a `stock.quant.package` (ADR-013), documentados campos que ya existen, eliminada propuesta de modelo HU separado, enfoque cambiado a "industrializar stock.quant.package".*
+*Documento corregido en v1.2. v1.0→v1.1: documentados campos existentes, eliminado modelo HU separado. v1.1→v1.2: confirmado `stock.package` como nombre correcto (ADR-013).*

@@ -113,9 +113,9 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 
 ---
 
-## 4. Paquetes / HU — `stock.quant.package`
+## 4. Paquetes / HU — `stock.package`
 
-> **Nota importante**: En Odoo 19 el modelo se llama `stock.quant.package` (la clase Python es `QuantPackage`). La tabla en PostgreSQL es `stock_quant_package`. El modelo `stock.package` no existe como modelo independiente en Community estándar.
+> **Nota v1.2**: En Odoo 19 el modelo es `stock.package` (clase Python `StockPackage`, `_name = 'stock.package'`). El `stock.quant` referencia packages via `package_id = fields.Many2one('stock.package', ...)`.
 
 | Campo / Funcionalidad | Estado | Detalle |
 |---|---|---|

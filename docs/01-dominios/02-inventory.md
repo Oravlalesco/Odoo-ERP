@@ -77,15 +77,21 @@ En lugar de agregar dimensiones al quant, implementamos estados operacionales as
 
 | Estado WMS | Implementación | Cómo funciona |
 |---|---|---|
-| **Quality Hold** | Mover a ubicación tipo `QUALITY_HOLD` | Odoo ya mueve inventario entre locations — usamos una location especial |
-| **Quarantine** | Mover a ubicación tipo `QUARANTINE` | Location especial de cuarentena |
-| **Damaged** | Mover a ubicación tipo `DAMAGE` | Location especial de daños |
-| **Available** | Inventario en ubicación de almacenamiento normal | El estado por defecto |
+| **Quality Hold** | Location `usage='internal'` + `wms_location_role='QUALITY_HOLD'` | Odoo sigue tratándola como location interna; el WMS la excluye de allocation |
+| **Quarantine** | Location `usage='internal'` + `wms_location_role='QUARANTINE'` | Misma mecánica, allocation la ignora |
+| **Damaged** | Location `usage='internal'` + `wms_location_role='DAMAGE'` | Misma mecánica |
+| **Available** | Inventario en location con `wms_location_role='STORAGE'` | El estado por defecto |
 | **Reserved** | `stock.quant.reserved_quantity` | **Ya lo maneja Odoo** |
 | **Ownership** | `stock.quant.owner_id` | **Ya lo maneja Odoo** |
-| **HU Context** | `stock.quant.package_id` | **Ya lo maneja Odoo** |
+| **HU Context** | `stock.quant.package_id` → `stock.package` | **Ya lo maneja Odoo** |
 | **Operational Block** | `wms.inventory.block` (modelo nuevo) | Bloqueo temporal por conteo, investigación, etc. |
 | **Reservation Context** | `wms.allocation` (modelo nuevo) | Para qué wave/orden se reservó — NO en el quant |
+
+> **ADR-026 (v1.2)**: `stock.location.usage` conserva la semántica Odoo. `wms_location_role` aporta la semántica WMS.
+>
+> Odoo verifica internamente `location.usage == 'internal'` para replenishment, quant gathering y otras operaciones. Crear valores nuevos de `usage` rompería esa lógica.
+>
+> Roles WMS: `STORAGE`, `PICK_FACE`, `QUALITY_HOLD`, `QUARANTINE`, `DAMAGE`, `RECEIVING`, `STAGING`, `PACKING`, `CONSOLIDATION`, `DOCK`, `CROSS_DOCK`
 
 Este enfoque **usa la mecánica de Odoo** (mover inventario a ubicaciones especializadas) en vez de luchar contra ella.
 
@@ -109,18 +115,42 @@ Quality release:
   → De vuelta a disponible
 ```
 
-### Bloqueo Operacional (`wms.inventory.block`)
+### Bloqueo Operacional (`wms.inventory.block`) — v1.2
 
 Para bloqueos que no implican movimiento físico (ej: inventario bloqueado durante conteo):
 
+> ⚠️ La v1.1 usaba `quant_id` como referencia del bloqueo. Esto es frágil porque `stock.quant` es una representación técnica que Odoo puede mergear, crear y eliminar durante la gestión de inventario. Un bloqueo debe referenciar **dimensiones lógicas**, no IDs de registros técnicos.
+
 | Campo | Significado |
 |---|---|
-| `quant_id` | Quant bloqueado |
+| `block_scope` | Scope: `LOCATION`, `PRODUCT_LOCATION`, `LOT`, `PACKAGE`, `OWNER_LOCATION` |
+| `product_id` | Producto (si aplica al scope) |
+| `location_id` | Ubicación (si aplica al scope) |
+| `lot_id` | Lote (si aplica al scope) |
+| `package_id` | Package/HU (si aplica al scope) |
+| `owner_id` | Propietario (si aplica al scope) |
 | `block_type` | Tipo: `CYCLE_COUNT`, `INVESTIGATION`, `HOLD`, `CUSTOMS` |
 | `reason` | Motivo del bloqueo |
 | `blocked_by` | Usuario que bloqueó |
 | `blocked_at` | Timestamp |
 | `released_at` | Timestamp de liberación (null = activo) |
+
+Ejemplo — bloquear todo el inventario de una ubicación durante conteo cíclico:
+
+```text
+block_scope = LOCATION
+location_id = A03-R02-L04
+block_type = CYCLE_COUNT
+```
+
+Ejemplo — bloquear un lote específico por investigación de calidad:
+
+```text
+block_scope = LOT
+lot_id = L00231
+product_id = SKU-A
+block_type = INVESTIGATION
+```
 
 El Allocation Engine **consulta** `wms.inventory.block` antes de asignar inventario.
 
@@ -133,7 +163,9 @@ El Allocation Engine **consulta** `wms.inventory.block` antes de asignar inventa
 
 ### 1. Operational Event Journal (`wms.inventory.event`)
 
-**Propósito**: Trazabilidad operacional de cada acción sobre inventario.
+**Propósito**: Trazabilidad operacional de cada acción sobre inventario **ejecutada por el WMS**.
+
+> **Alcance v1.2**: El journal es completo para operaciones WMS (RF, allocation, wave, replenishment). Operaciones estándar Odoo (backoffice adjustments, imports, manufacturing) pueden no generar eventos. No afirmamos reconstructibilidad total del inventario hasta demostrar cobertura de todas las mutaciones de stock.
 
 **Requisito transaccional**: Se persiste **atómicamente** dentro de la misma transacción que modifica el inventario:
 

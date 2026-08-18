@@ -24,20 +24,41 @@ Este documento establece contratos transaccionales que **todo el código WMS deb
 
 ---
 
-## Invariantes del Sistema
+## Invariantes del Sistema (v1.2)
 
-Una **invariante** (*invariant*) es una condición que siempre debe ser verdadera en el sistema. Si una invariante se viola, hay un bug.
+> ⚠️ La v1.1 mezclaba invariantes reales de Odoo con políticas del WMS. Odoo **sí soporta quants negativos** en ciertos escenarios (ajustes, scrap, producciones). `quantity >= 0` no es una invariante universal de Odoo.
+
+### Invariantes Odoo/Core (no negociables)
+
+Condiciones que la plataforma garantiza a nivel de base de datos:
 
 | ID | Invariante | Consecuencia si se viola |
 |---|---|---|
-| INV-001 | `stock.quant.quantity >= 0` siempre | Stock negativo → corrupción de inventario |
-| INV-002 | `stock.quant.reserved_quantity <= quantity` siempre | Sobre-reserva → picks imposibles |
-| INV-003 | Un `wms.work` en estado `ASSIGNED` tiene exactamente un `assigned_resource_id` | Doble asignación → doble pick |
-| INV-004 | Un `wms.work` en estado `READY` no tiene `assigned_resource_id` | Work huérfano → operador fantasma |
-| INV-005 | `wms.inventory.event` se crea atómicamente con el cambio de `stock.quant` | Event journal incompleto → trazabilidad rota |
-| INV-006 | `wms.outbox` se crea atómicamente con la acción que genera el evento | Outbox desincronizado → integraciones inconsistentes |
-| INV-007 | La suma de `reserved_quantity` de quants = suma de `product_uom_qty` de moves `assigned` | Reservas desbalanceadas → deadlocks o unreserved inventory |
-| INV-008 | Cada `wms.allocation` tiene al menos un quant válido | Allocation sin stock → pick imposible |
+| CORE-001 | Un `wms.work` en estado `ASSIGNED` tiene exactamente un `assigned_resource_id` | Doble asignación → doble pick |
+| CORE-002 | Un `wms.work` en estado `READY` no tiene `assigned_resource_id` | Work huérfano → operador fantasma |
+| CORE-003 | `wms.inventory.event` se crea atómicamente con el cambio de `stock.quant` (para operaciones WMS) | Event journal incompleto → trazabilidad rota |
+| CORE-004 | `wms.outbox` se crea atómicamente con la acción que genera el evento | Outbox desincronizado → integraciones inconsistentes |
+| CORE-005 | Cada `wms.allocation` tiene al menos un quant válido | Allocation sin stock → pick imposible |
+| CORE-006 | `claim_token` de `wms.work` es único | Previene race conditions en re-claim |
+
+### Políticas WMS (enforced por el WMS, no por Odoo)
+
+Condiciones que el WMS prohíbe en operaciones normales pero que Odoo puede permitir:
+
+| ID | Política | Enforcement | Excepción permitida |
+|---|---|---|---|
+| POL-001 | Stock negativo prohibido en ubicaciones `wms_location_role=STORAGE` | Validación WMS pre-move | Ajustes de inventario por supervisor |
+| POL-002 | `reserved_quantity <= quantity` en operaciones WMS | Validación en allocation | Odoo puede violar esto durante procesamiento interno |
+| POL-003 | Suma de reservas = suma de moves assigned | Consistency check periódico | Discrepancias generan alerta, no bloqueo |
+
+### Consistency Checks (verificaciones periódicas)
+
+| ID | Check | Frecuencia | Acción si falla |
+|---|---|---|---|
+| CHK-001 | Reservas balanceadas (sum reserved vs sum moves) | Cada 5 min | Alerta a Control Tower |
+| CHK-002 | Works sin lease activo en ASSIGNED/IN_PROGRESS | Cada 1 min | Auto-expire lease |
+| CHK-003 | Outbox con mensajes sin procesar > 5 min | Cada 1 min | Alerta + retry |
+| CHK-004 | Event journal gaps (quant changes sin evento) | Cada hora | Alerta (ver ARC-009 abajo) |
 
 ---
 
@@ -105,19 +126,42 @@ Una **invariante** (*invariant*) es una condición que siempre debe ser verdader
 
 > **ADR-010**: Todos los comandos recibidos externamente son idempotentes.
 
-### Implementación
+### Implementación (v1.2)
 
-Cada comando idempotente requiere:
+> ⚠️ La v1.1 proponía `SELECT ... FOR UPDATE` para verificar la key. Esto tiene una **race condition**: `FOR UPDATE` no puede bloquear una fila que no existe aún. Dos transacciones simultáneas ambas verían "no existe".
 
-```text
-1. Recibir comando con idempotency_key
-2. BEGIN
-3. SELECT FROM wms_idempotency WHERE key = %s FOR UPDATE
-4. Si existe → ROLLBACK, retornar respuesta almacenada
-5. Si no existe → ejecutar comando
-6. INSERT INTO wms_idempotency (key, response, created_at) VALUES (...)
-7. COMMIT
+Corrección — usar `INSERT ... ON CONFLICT` con **UNIQUE constraint**:
+
+```sql
+-- Tabla con UNIQUE constraint
+CREATE TABLE wms_idempotency (
+    key VARCHAR PRIMARY KEY,
+    status VARCHAR NOT NULL DEFAULT 'PROCESSING',
+    response JSONB,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Algoritmo correcto:
+BEGIN;
+
+INSERT INTO wms_idempotency (key, status)
+VALUES ($key, 'PROCESSING')
+ON CONFLICT (key) DO NOTHING
+RETURNING key;
+
+-- Si RETURNING devuelve la key: este request ganó ownership
+--   → ejecutar comando
+--   → UPDATE wms_idempotency SET status='DONE', response=$response
+
+-- Si RETURNING está vacío: otro request ya tiene la key
+--   → SELECT status, response FROM wms_idempotency WHERE key = $key
+--   → Si status='DONE': retornar response almacenada
+--   → Si status='PROCESSING': retornar 409 o esperar brevemente
+
+COMMIT;
 ```
+
+Solo el request que logra el `INSERT` adquiere ownership del procesamiento. El `UNIQUE constraint` lo garantiza a nivel PostgreSQL.
 
 ### Dónde se aplica
 

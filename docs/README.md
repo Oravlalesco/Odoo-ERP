@@ -86,7 +86,7 @@
 
 | # | Documento | Contenido | v1.1 |
 |---|---|---|---|
-| 01 | [ADR](05-decisiones/01-adr.md) | **24 ADRs** (10 originales + 14 nuevos) | ✏️ |
+| 01 | [ADR](05-decisiones/01-adr.md) | **27 ADRs** (10 original + 14 v1.1 + 3 v1.2) | ✏️ |
 | 02 | [Ficha de Fase](05-decisiones/02-ficha-fase-template.md) | Template + 8 secciones nuevas | ✏️ |
 
 ---
@@ -98,6 +98,23 @@
 | [Plan Maestro](plan.md) | Documento original de 2,272 líneas — fuente de toda la documentación |
 
 ---
+
+## Changelog v1.2
+
+| Cambio | ARC | Impacto |
+|---|---|---|
+| `stock.package` confirmado como nombre correcto | ARC-001 | Corrige error en Capability Matrix, HU, Inventory, ADR-013 |
+| `wms_location_role` en lugar de nuevos `usage` | ARC-002 | Previene romper lógica interna de Odoo (ADR-026) |
+| IN_PROGRESS no auto-requeue offline | ARC-003 | Previene doble movimiento físico (ADR-025) |
+| Idempotencia con `INSERT ON CONFLICT` | ARC-004 | Corrige race condition en procesamiento concurrente |
+| Invariantes separadas de políticas WMS | ARC-005 | Reconoce que Odoo soporta quants negativos |
+| Programa B alineado con v1.2 | ARC-006 | Elimina documentation drift |
+| `pick_packaging_id` no `pick_uom_id` | ARC-007 | Separa UOM de Packaging correctamente |
+| `wms.inventory.block` por scope | ARC-008 | Block por dimensiones lógicas, no por quant ID |
+| Event Journal scoped a WMS ops | ARC-009 | No afirmamos reconstructibilidad prematura |
+| CLAIMED simplificado a transitorio | ARC-010 | Menos estados = menos complejidad |
+| Odoo version pinning | ARC-011 | Reproducibilidad (ADR-027) |
+| NFR math corregida | ARC-012 | Heartbeat y sizing clarificados |
 
 ## Changelog v1.1
 

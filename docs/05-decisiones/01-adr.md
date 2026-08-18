@@ -114,11 +114,11 @@ Un **ADR (Architecture Decision Record)** — Registro de Decisión Arquitectón
 
 ---
 
-### ADR-013: `stock.quant.package` es la base de Handling Units
+### ADR-013: `stock.package` es la base de Handling Units
 
-**Contexto**: En Odoo 19 el modelo es `stock.quant.package` (clase `QuantPackage`), no `stock.package`. Ya posee jerarquía, dimensiones, peso y tipos de paquete.
+**Contexto**: En Odoo 19 el modelo es `stock.package` (clase `StockPackage`, `_name = 'stock.package'`). Ya posee jerarquía, dimensiones, peso y tipos de paquete.
 
-**Decisión**: No crearemos un modelo `wms.handling.unit` separado. La HU ES `stock.quant.package` extendido con campos WMS.
+**Decisión**: No crearemos un modelo `wms.handling.unit` separado. La HU ES `stock.package` extendido con campos WMS.
 
 **Consecuencia**: Se reduce significativamente el esfuerzo de la Fase HU.
 
@@ -220,6 +220,38 @@ Un **ADR (Architecture Decision Record)** — Registro de Decisión Arquitectón
 
 ---
 
+## ADR v1.2 — Correcciones Quirúrgicas
+
+### ADR-025: In-progress Work cannot auto-requeue after offline lease expiry
+
+**Contexto**: Un operador offline puede tener físicamente la mercadería en sus manos. Si auto-reasignamos el Work a otro operador, se produce un doble movimiento físico (ej: 24 unidades extraídas para demanda de 12).
+
+**Decisión**: Works en IN_PROGRESS con líneas ejecutadas van a estado `RECONCILIATION_REQUIRED` cuando el lease expira, no a READY. Solo Works en ASSIGNED sin ejecución pueden auto-requeue.
+
+**Consecuencia**: Se requiere intervención de supervisor o reconciliación del operador original para Works parcialmente ejecutados offline.
+
+---
+
+### ADR-026: `stock.location.usage` conserva la semántica Odoo
+
+**Contexto**: Odoo verifica internamente `location.usage == 'internal'` para replenishment, quant gathering y otras operaciones. Crear valores nuevos de `usage` rompe esa lógica.
+
+**Decisión**: Agregamos `wms_location_role` como campo selection en `stock.location`. Los roles WMS (STORAGE, PICK_FACE, QUALITY_HOLD, QUARANTINE, etc.) viven en este campo, no en `usage`.
+
+**Consecuencia**: Todas las locations WMS mantienen `usage='internal'`. La semántica WMS se lee de `wms_location_role`.
+
+---
+
+### ADR-027: Odoo upstream version must be pinned by digest
+
+**Contexto**: El tag `odoo:19.0` puede avanzar sin aviso. La Capability Matrix depende de campos y métodos específicos que pueden cambiar entre commits.
+
+**Decisión**: El proyecto fija la versión de Odoo por image digest SHA y upstream commit, no solo por tag. La Capability Matrix debe verificarse contra el commit exacto.
+
+**Consecuencia**: Actualizaciones de Odoo upstream requieren re-verificación de la Capability Matrix y regression testing.
+
+---
+
 ## Cómo agregar nuevos ADR
 
 Cada nuevo ADR debe seguir este formato:
@@ -236,4 +268,4 @@ Cada nuevo ADR debe seguir este formato:
 
 ---
 
-*Documento derivado de la sección 47 del [Plan Maestro](../plan.md). Actualizado en v1.1 con ADR-011 a ADR-024.*
+*Documento derivado de la sección 47 del [Plan Maestro](../plan.md). Actualizado v1.1: ADR-011 a ADR-024. v1.2: ADR-025 a ADR-027.*

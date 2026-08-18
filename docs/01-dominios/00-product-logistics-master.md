@@ -60,28 +60,36 @@ Modelo nuevo, **one-to-one con `product.template`**, que contiene toda la inform
 | `gtin` | Global Trade Item Number | Código GTIN del producto |
 | `additional_barcodes` | Additional Barcodes | Códigos de barras alternativos |
 
-### UOM Operacionales
+### UOM y Packaging Operacionales (v1.2)
 
-Odoo gestiona UOM base y de compra. El WMS necesita UOM adicionales para operaciones:
+> ⚠️ La v1.1 mezclaba `uom.uom` con `product.packaging`. Son conceptos distintos:
+>
+> `uom.uom` = Unidad de medida abstracta: Unidad, Kg, Litro, Metro
+>
+> `product.packaging` = Configuración física: Caja de 12, Pallet de 576
 
-| Campo | En inglés | Significado | Ejemplo |
-|---|---|---|---|
-| `pick_uom_id` | Pick UOM | Unidad en que se recolecta normalmente | Unidad, caja inner |
-| `case_uom_id` | Case UOM | Unidad de caja (case) | Caja de 12 |
-| `pallet_uom_id` | Pallet UOM | Unidad de pallet | Pallet de 48 cajas |
+El WMS referencia **packagings** para operaciones, no UOM:
 
-Estos se apoyan en `product.packaging` de Odoo para la conversión:
+| Campo | En inglés | Significado | Referencia a | Ejemplo |
+|---|---|---|---|---|
+| `pick_packaging_id` | Pick Packaging | Packaging en que se recolecta normalmente | `product.packaging` | Inner Box (qty=6) |
+| `case_packaging_id` | Case Packaging | Packaging de caja | `product.packaging` | Case (qty=12) |
+| `pallet_packaging_id` | Pallet Packaging | Packaging de pallet | `product.packaging` | Pallet (qty=576) |
+
+Estos apuntan a registros de `product.packaging` de Odoo que ya definen `qty` y `barcode`:
 
 ```text
 product.packaging "Inner Box": qty=6, barcode=7890001
 product.packaging "Case":      qty=12, barcode=7890002
-product.packaging "Pallet":    qty=576 (12 × 48)
+product.packaging "Pallet":    qty=576 (12 cases × 48 cases/pallet)
 
 wms.product.logistics:
-  pick_uom → references packaging "Inner Box"
-  case_uom → references packaging "Case"
-  pallet_uom → references packaging "Pallet"
+  pick_packaging_id → references packaging "Inner Box"
+  case_packaging_id → references packaging "Case"
+  pallet_packaging_id → references packaging "Pallet"
 ```
+
+La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin modificación.
 
 ### Configuración de Pallet (Ti-Hi)
 

@@ -321,15 +321,46 @@ La recuperación ante desconexión funciona mediante **lease** (arrendamiento te
    
 5. RECLAIM (cron job o supervisor)
    Detecta: lease expirado + no heartbeat
-   Work: ASSIGNED/IN_PROGRESS → RECLAIMABLE
+
+   SI state == ASSIGNED (sin ejecución):
+     → RECLAIMABLE → READY (auto-requeue seguro)
+
+   SI state == IN_PROGRESS (hay líneas ejecutadas):
+     → RECONCILIATION_REQUIRED (NO auto-requeue)
    
 6. RESOLUCIÓN:
-   a) Auto-requeue: RECLAIMABLE → READY (otro operador lo toma)
-   b) Supervisor: RECLAIMABLE → ASSIGNED (reasignar manualmente)
-   c) Si el operador original vuelve: puede reclamar con claim_token
+   ASSIGNED sin ejecución:
+     a) Auto-requeue: RECLAIMABLE → READY
+   
+   IN_PROGRESS con líneas ejecutadas:
+     a) Supervisor revisa y reasigna: RECONCILIATION → ASSIGNED
+     b) Supervisor cancela y genera Work compensatorio
+     c) Operador original reconecta: reconcilia con claim_token
 ```
 
-### Ejemplo: Operador pierde Wi-Fi
+### ⚠️ Corrección v1.2: IN_PROGRESS no puede auto-reasignarse
+
+> **ADR-025 (v1.2)**: In-progress Work cannot auto-requeue after offline lease expiry.
+
+El operador A puede tener **físicamente la mercadería en sus manos**. Si auto-reasignamos:
+
+```text
+A offline: PICK 12 SKU-A (física, no confirmada en server)
+B recibe el mismo PICK → PICK 12 SKU-A
+
+Resultado: 24 unidades extraídas para demanda de 12
+```
+
+No se puede deshacer un movimiento físico con un `ROLLBACK`.
+
+Por tanto:
+
+| Estado al expirar lease | Resolución | Automático |
+|---|---|---|
+| **ASSIGNED** (sin líneas ejecutadas) | Auto-requeue a READY | ✅ Sí |
+| **IN_PROGRESS** (con líneas ejecutadas) | RECONCILIATION_REQUIRED | ❌ No — requiere supervisor |
+
+### Ejemplo: Operador pierde Wi-Fi (v1.2)
 
 ```text
 17:14:02  Operador 129 claims Work 10592
@@ -344,29 +375,44 @@ La recuperación ante desconexión funciona mediante **lease** (arrendamiento te
 17:15:15  *** Wi-Fi lost ***
 
 17:25:02  Lease expired. No heartbeat en 10 min.
-         state=RECLAIMABLE
+         state=RECONCILIATION_REQUIRED  ← NO auto-requeue
+         (porque hay líneas ejecutadas)
 
-17:25:03  Scheduler job detecta RECLAIMABLE
-         reclaim_count=1
-         Si reclaim_count < max_reclaims: state=READY
-         Otro operador puede tomarlo
+17:25:03  Supervisor notificado vía Control Tower alert
 
-17:28:00  Operador 129 reconecta
-         Intenta reclamar con claim_token → FAIL (ya en READY)
-         Solicita nuevo Work
+17:28:00  Caso A: Operador 129 reconecta
+         → reconcilia offline journal con server
+         → Work continúa normalmente
+
+17:28:00  Caso B: Operador 129 no aparece
+         → Supervisor investiga físicamente
+         → Confirma que pick ocurrió o revierte
+         → Reasigna o compensa
 ```
+
+### Simplificación de Estado CLAIMED (v1.2)
+
+> **ARC-010**: `CLAIMED` es un estado transitorio dentro de la transacción atómica de claim.
+
+```text
+READY
+   ↓ (atomic transaction)
+ASSIGNED    ← con claim_token, lease, etc.
+```
+
+`CLAIMED` no se persiste como estado independiente porque la transacción es atómica (<50ms). Si la transacción falla, el Work queda en `READY`. No hay ventana donde un observador externo vería `CLAIMED`.
 
 ### Trabajo Parcialmente Completado
 
-Si un Work en IN_PROGRESS se convierte en RECLAIMABLE y tiene líneas ya completadas:
+Si un Work en RECONCILIATION_REQUIRED tiene líneas ya completadas:
 
 ```text
 Work 10592:
-  Line 10: PICK from A03 → COMPLETED ✓
-  Line 20: PUT to B07 → PENDING
+  Line 10: PICK from A03 → COMPLETED ✓ (confirmado en server)
+  Line 20: PUT to B07 → PENDING (no confirmado)
 ```
 
-El nuevo operador que tome el work verá solo las líneas pendientes. Las líneas ya confirmadas no se re-ejecutan. El `assignment_version` se incrementa para trazabilidad.
+El supervisor puede: reasignar solo las líneas pendientes a otro operador, o esperar reconciliación del operador original.
 
 ---
 
