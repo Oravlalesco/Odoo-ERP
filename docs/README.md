@@ -1,89 +1,119 @@
-# Plan Maestro — WMS Industrial sobre Odoo 19 Community
+# WMS Industrial — Documentación Técnica v1.1
 
-> Índice maestro de la documentación técnica y funcional del sistema WMS.
-
-Este repositorio documenta el diseño completo de una **plataforma WMS (Warehouse Management System / Sistema de Gestión de Almacén) industrial** construida sobre el framework Odoo 19 Community. El documento original de visión se encuentra en [plan.md](plan.md).
-
----
-
-## 📋 Estructura de la Documentación
-
-### 🎯 Visión del Producto
-
-| # | Documento | Descripción |
-|---|-----------|-------------|
-| 1 | [Objetivo del Producto](00-vision/01-objetivo-producto.md) | Qué sistema construimos, por qué Odoo como framework y diferenciación frente a Odoo Inventory estándar |
-| 2 | [Niveles Lógicos y Mapa del Producto](00-vision/02-niveles-logicos.md) | Los tres niveles lógicos (Registro, Planificación, Ejecución) y los 16 macrodominios |
+> Blueprint completo del sistema WMS industrial construido sobre Odoo 19 Community.
+>
+> **v1.1**: Correcciones arquitectónicas tras revisión contra código fuente Odoo 19, adición de matriz de capacidades, Product Logistics Master, Transaction Architecture, Work Lease Protocol, NFR/SLOs y 14 nuevos ADR.
 
 ---
 
-### 🏗️ Dominios del WMS
+## Índice
 
-| # | Documento | Dominio | Secciones del Plan |
-|---|-----------|---------|-------------------|
-| 1 | [Warehouse Master](01-dominios/01-warehouse-master.md) | Topología y representación digital de la bodega | §4 |
-| 2 | [Inventory](01-dominios/02-inventory.md) | Dominio de inventario y Ledger de eventos | §5-6 |
-| 3 | [Handling Units](01-dominios/03-handling-units.md) | Unidades de manejo: pallets, cajas, SSCC | §7 |
-| 4 | [Work Execution](01-dominios/04-work-execution.md) | Motor de trabajo y motor de colas | §8-9 |
-| 5 | [Resources](01-dominios/05-resources.md) | Recursos, operadores, equipos y asignación | §10-11 |
-| 6 | [Rule Engine](01-dominios/06-rule-engine.md) | Motor de reglas configurables | §13 |
-| 7 | [Inbound](01-dominios/07-inbound.md) | Recepción, Dock/Yard y Calidad | §14-16 |
-| 8 | [Putaway](01-dominios/08-putaway.md) | Almacenamiento dirigido y Cross Dock | §17-18 |
-| 9 | [Internal Logistics](01-dominios/09-internal-logistics.md) | Replenishment y Slotting | §19-20 |
-| 10 | [Outbound](01-dominios/10-outbound.md) | Allocation, Waves, Picking, Consolidation | §21-26 |
-| 11 | [Packing & Shipping](01-dominios/11-packing-shipping.md) | Empaque, Staging, Loading y Despacho | §27-30 |
-| 12 | [Reverse Logistics](01-dominios/12-reverse-logistics.md) | Devoluciones y logística inversa | §31 |
-| 13 | [Inventory Control](01-dominios/13-inventory-control.md) | Conteo cíclico y control de inventario | §32 |
-| 14 | [Labor Management](01-dominios/14-labor-management.md) | Gestión de productividad y mano de obra | §33 |
+### 🔭 Visión
+
+| # | Documento | Contenido |
+|---|---|---|
+| 00.1 | [Objetivo del Producto](00-vision/01-objetivo-producto.md) | Visión, diferenciación, framework Odoo, capacidades objetivo |
+| 00.2 | [Niveles Lógicos](00-vision/02-niveles-logicos.md) | Niveles A/B/C, 16 macrodominios, mapa de capacidades |
+
+---
+
+### 🧩 Dominios
+
+| # | Documento | Contenido | v1.1 |
+|---|---|---|---|
+| **00** | [**Odoo 19 Capability Matrix**](01-dominios/00-odoo19-capability-matrix.md) | **Qué reutilizar, extender y crear** | 🆕 |
+| **00** | [**Product Logistics Master**](01-dominios/00-product-logistics-master.md) | **Perfil logístico del producto** | 🆕 |
+| 01 | [Warehouse Master](01-dominios/01-warehouse-master.md) | Topología, zonas, racks, docks, capacidades |  |
+| 02 | [Inventory](01-dominios/02-inventory.md) | Stock, ledger, estados WMS, tres capas de registro | ✏️ |
+| 03 | [Handling Units](01-dominios/03-handling-units.md) | HU sobre `stock.quant.package`, SSCC, operaciones | ✏️ |
+| 04 | [Work Execution](01-dominios/04-work-execution.md) | Work Engine + Queue Engine + **Lease Protocol** | ✏️ |
+| 05 | [Resources](01-dominios/05-resources.md) | Operadores, equipos, colas, assignment |  |
+| 06 | [Rule Engine](01-dominios/06-rule-engine.md) | **Typed Policy Engine** (sin safe_eval) | ✏️ |
+| 07 | [Inbound](01-dominios/07-inbound.md) | Recepción, dock, calidad |  |
+| 08 | [Putaway](01-dominios/08-putaway.md) | Almacenamiento dirigido, cross dock |  |
+| 09 | [Internal Logistics](01-dominios/09-internal-logistics.md) | Replenishment, slotting |  |
+| 10 | [Outbound](01-dominios/10-outbound.md) | Allocation, waves, picking, consolidation |  |
+| 11 | [Packing & Shipping](01-dominios/11-packing-shipping.md) | Empaque, staging, loading, despacho |  |
+| 12 | [Reverse Logistics](01-dominios/12-reverse-logistics.md) | Devoluciones |  |
+| 13 | [Inventory Control](01-dominios/13-inventory-control.md) | Conteo cíclico |  |
+| 14 | [Labor Management](01-dominios/14-labor-management.md) | Productividad |  |
 
 ---
 
 ### ⚙️ Operaciones
 
-| # | Documento | Descripción | Secciones del Plan |
-|---|-----------|-------------|-------------------|
-| 1 | [RF / WMS Mobile](02-operaciones/01-rf-mobile.md) | Cliente móvil para operadores RF | §34 |
-| 2 | [Exception Engine](02-operaciones/02-exception-engine.md) | Motor de excepciones operacionales | §35 |
-| 3 | [Control Tower](02-operaciones/03-control-tower.md) | Monitor operacional en tiempo real | §41 |
+| # | Documento | Contenido | v1.1 |
+|---|---|---|---|
+| 01 | [RF / Mobile](02-operaciones/01-rf-mobile.md) | RF propio + **Offline Protocol** | ✏️ |
+| 02 | [Exception Engine](02-operaciones/02-exception-engine.md) | 13 tipos de excepción |  |
+| 03 | [Control Tower](02-operaciones/03-control-tower.md) | Dashboard operacional |  |
 
 ---
 
-### 🖥️ Plataforma Técnica
+### 🏗️ Plataforma
 
-| # | Documento | Descripción | Secciones del Plan |
-|---|-----------|-------------|-------------------|
-| 1 | [Integración](03-plataforma/01-integracion.md) | API, contratos, síncrono vs asíncrono | §36-37 |
-| 2 | [Kubernetes](03-plataforma/02-kubernetes.md) | Arquitectura K8s, separación de runtime, escalabilidad | §38-39 |
-| 3 | [Observability](03-plataforma/03-observability.md) | Monitoreo de plataforma y negocio | §40 |
-| 4 | [Seguridad](03-plataforma/04-seguridad.md) | RBAC, roles y scopes | §42 |
-| 5 | [Auditoría](03-plataforma/05-auditoria.md) | Trazabilidad de acciones críticas | §43 |
-| 6 | [Disponibilidad](03-plataforma/06-disponibilidad.md) | Tolerancia a fallos e idempotencia | §44 |
+| # | Documento | Contenido | v1.1 |
+|---|---|---|---|
+| **00** | [**Transaction Architecture**](03-plataforma/00-transaction-architecture.md) | **Invariantes, boundaries, locking, idempotencia** | 🆕 |
+| 01 | [Integración](03-plataforma/01-integracion.md) | API, inbox/outbox, sync vs async |  |
+| 02 | [Kubernetes](03-plataforma/02-kubernetes.md) | K8s, HPA, PDB, runtime separation |  |
+| 03 | [Observability](03-plataforma/03-observability.md) | Métricas técnicas y de negocio |  |
+| 04 | [Seguridad](03-plataforma/04-seguridad.md) | RBAC, roles, scopes |  |
+| 05 | [Auditoría](03-plataforma/05-auditoria.md) | Trazabilidad completa |  |
+| 06 | [Disponibilidad](03-plataforma/06-disponibilidad.md) | Idempotencia, concurrencia, HA |  |
+| **07** | [**DEV vs PROD**](03-plataforma/07-plataforma-dev-vs-prod.md) | **Diferencias infraestructura dev/prod** | 🆕 |
+| **08** | [**NFR Workload Model**](03-plataforma/08-nfr-workload-model.md) | **Volúmenes, SLOs, dimensionamiento** | 🆕 |
 
 ---
 
 ### 🗺️ Roadmap
 
-| # | Documento | Programa | Fases |
-|---|-----------|----------|-------|
-| 1 | [Programa A](04-roadmap/01-programa-a.md) | Arquitectura y Plataforma | 0–3 |
-| 2 | [Programa B](04-roadmap/02-programa-b.md) | WMS Foundation (Kernel) | 4–9 |
-| 3 | [Programa C](04-roadmap/03-programa-c.md) | Inbound & Internal Logistics | 10–17 |
-| 4 | [Programa D](04-roadmap/04-programa-d.md) | Outbound | 18–26 |
-| 5 | [Programa E](04-roadmap/05-programa-e.md) | Inventory & Enterprise Operations | 27–33 |
-| 6 | [Programa F](04-roadmap/06-programa-f.md) | Plataforma Empresarial | 34–43 |
-| 7 | [Programa G](04-roadmap/07-programa-g.md) | Optimización Avanzada (AI/ML) | 44–50 |
+| # | Documento | Contenido |
+|---|---|---|
+| 01 | [Programa A](04-roadmap/01-programa-a.md) | Fases 0-3: Arquitectura y plataforma |
+| 02 | [Programa B](04-roadmap/02-programa-b.md) | Fases 4-9: Kernel WMS |
+| 03 | [Programa C](04-roadmap/03-programa-c.md) | Fases 10-17: Inbound & Internal |
+| 04 | [Programa D](04-roadmap/04-programa-d.md) | Fases 18-26: Outbound |
+| 05 | [Programa E](04-roadmap/05-programa-e.md) | Fases 27-33: Enterprise |
+| 06 | [Programa F](04-roadmap/06-programa-f.md) | Fases 34-43: Plataforma |
+| 07 | [Programa G](04-roadmap/07-programa-g.md) | Fases 44-50: AI/ML |
+
+> **v1.1**: Integration Foundation, Security Baseline, Observability Baseline y Product Logistics Master se mueven al Kernel (ADR-023/024).
 
 ---
 
-### 📐 Decisiones y Templates
+### 📋 Decisiones
 
-| # | Documento | Descripción | Secciones del Plan |
-|---|-----------|-------------|-------------------|
-| 1 | [ADR — Architecture Decision Records](05-decisiones/01-adr.md) | Decisiones arquitectónicas formales | §47 |
-| 2 | [Ficha de Fase — Template](05-decisiones/02-ficha-fase-template.md) | Template para detallar cada fase | §46 |
+| # | Documento | Contenido | v1.1 |
+|---|---|---|---|
+| 01 | [ADR](05-decisiones/01-adr.md) | **24 ADRs** (10 originales + 14 nuevos) | ✏️ |
+| 02 | [Ficha de Fase](05-decisiones/02-ficha-fase-template.md) | Template + 8 secciones nuevas | ✏️ |
 
 ---
 
-## 🔗 Documento Original
+### 📖 Plan Maestro
 
-El plan maestro completo, sin modificar, se encuentra en [plan.md](plan.md).
+| Documento | Contenido |
+|---|---|
+| [Plan Maestro](plan.md) | Documento original de 2,272 líneas — fuente de toda la documentación |
+
+---
+
+## Changelog v1.1
+
+| Cambio | Impacto |
+|---|---|
+| Capability Matrix Odoo 19 | Reduce esfuerzo de Inventory, HU, Warehouse Master |
+| `stock.quant` identity protection (ADR-011/012) | Previene corrupción silenciosa de inventario |
+| `stock.quant.package` como base HU (ADR-013) | Reduce esfuerzo de Fase HU ~40% |
+| Product Logistics Master (ADR-024) | Nuevo dominio en Kernel |
+| Work Lease Protocol (ADR-015/016) | Corrige crash recovery, agrega heartbeat |
+| Transaction Architecture | Invariantes, boundaries, SLOs por operación |
+| RF Offline Protocol (ADR-017) | De bullet point a especificación técnica |
+| Typed Policy Engine (ADR-018) | Elimina riesgo de safe_eval |
+| Event Journal / Audit / Outbox separation (ADR-019) | Tres capas transaccionales distintas |
+| DEV vs PROD separation (ADR-020/021/022) | Addons inmutables, filestore RWX, migration protocol |
+| NFR Workload Model | Resuelve ambigüedad de volúmenes, define SLOs |
+| Cross-cutting concerns (ADR-023) | Security/Observability/Performance desde Fase 3 |
+| Phase Template + 8 secciones | Invariantes, TX boundary, idempotency, failure recovery |
+| 14 nuevos ADR (011-024) | Estabilización arquitectónica |

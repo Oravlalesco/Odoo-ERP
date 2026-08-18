@@ -1,0 +1,319 @@
+# Odoo 19 Community — Capability Matrix
+
+> Análisis detallado de lo que Odoo 19 Community ya posee, qué extenderemos y qué crearemos nuevo. Este documento debe existir **antes del modelo ER** porque cambia decisiones de diseño en múltiples dominios.
+
+---
+
+## Contexto
+
+### ¿Por qué esta matriz?
+
+La documentación v1.0 subestimaba varias capacidades que Odoo 19 Community ya trae de fábrica. Esto generaba dos riesgos:
+
+1. **Desarrollar lo que ya existe** — desperdiciar esfuerzo reconstruyendo funcionalidad disponible
+2. **Romper lo que ya funciona** — modificar la identidad lógica de modelos internos sin entender las consecuencias
+
+Esta matriz inspecciona los módulos `stock`, `stock_picking_batch`, `product`, UOM, packaging, locations, routes y reservations, y clasifica cada funcionalidad en una de cuatro categorías:
+
+| Categoría | Significado |
+|---|---|
+| ✅ **Reutilizar** | Odoo ya lo tiene y lo usamos tal cual |
+| 🔧 **Extender** | Odoo tiene la base, agregaremos campos o lógica |
+| 🆕 **Crear WMS** | No existe en Odoo, lo construimos nosotros |
+| ⚠️ **No tocar** | Funcionalidad interna de Odoo que no debemos modificar |
+
+---
+
+## 1. Inventario — `stock.quant`
+
+### Modelo: `stock.quant`
+
+La **fuente de verdad del inventario**. Cada quant representa una cantidad de un producto en una ubicación específica.
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| `product_id` | ✅ Reutilizar | Producto |
+| `company_id` | ✅ Reutilizar | Compañía |
+| `location_id` | ✅ Reutilizar | Ubicación |
+| `lot_id` | ✅ Reutilizar | Lote / serial |
+| `package_id` | ✅ Reutilizar | Paquete (HU) |
+| `owner_id` | ✅ Reutilizar | **Ya existe** — propietario del inventario (3PL) |
+| `quantity` | ✅ Reutilizar | Cantidad en mano |
+| `reserved_quantity` | ✅ Reutilizar | **Ya existe** — cantidad reservada |
+| `available_quantity` | ✅ Reutilizar | **Ya existe** — computed: quantity - reserved |
+| `in_date` | ✅ Reutilizar | Fecha de entrada (para FIFO/FEFO) |
+| `warehouse_id` | ✅ Reutilizar | **Ya existe** — bodega del quant |
+| `storage_category_id` | ✅ Reutilizar | **Ya existe** — categoría de almacenamiento |
+| `inventory_status` | ⚠️ **No agregar al quant** | Ver ADR-011/012 más abajo |
+| `quality_status` | ⚠️ **No agregar al quant** | Ver ADR-011/012 más abajo |
+
+### ⚠️ ADVERTENCIA CRÍTICA: Identidad Lógica del Quant
+
+Odoo consolida quants usando `_merge_quants()` con el siguiente `GROUP BY`:
+
+```sql
+GROUP BY product_id, company_id, location_id, lot_id, package_id, owner_id
+```
+
+Si agregamos `inventory_status` o `quality_status` como campos del quant **sin** modificar `_merge_quants()` y toda la lógica interna de gathering, merging, reservations y movimientos:
+
+```text
+Quant A: product=SKU-1, location=A03, status=AVAILABLE, qty=100
+Quant B: product=SKU-1, location=A03, status=QUARANTINE, qty=100
+```
+
+Odoo los consideraría el **mismo quant lógico** y podría fusionarlos → **catastrófico**.
+
+### Decisión de Diseño (ADR-011 / ADR-012)
+
+> **Inventory Status no vive inicialmente en `stock.quant`.**
+
+Alternativas para implementar estados operacionales WMS:
+
+| Necesidad | Solución propuesta | Dónde vive |
+|---|---|---|
+| Quality Hold | Mover a ubicación tipo `QUALITY_HOLD` o marcar el lote | `stock.location` (tipo) o `stock.lot` (campo) |
+| Quarantine | Mover a ubicación tipo `QUARANTINE` | `stock.location` (tipo) |
+| Damage | Mover a ubicación tipo `DAMAGE` | `stock.location` (tipo) |
+| Operational Block | WMS availability policy: model `wms.inventory.block` | Modelo nuevo WMS |
+| Reservation Context | `stock.move` / `stock.move.line` / `wms.allocation` | Modelos existentes + nuevo |
+
+Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) en vez de luchar contra ella.
+
+---
+
+## 2. Movimientos — `stock.move` / `stock.move.line`
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| `product_id` | ✅ Reutilizar | Producto |
+| `product_uom_qty` / `quantity` | ✅ Reutilizar | Cantidades |
+| `location_id` / `location_dest_id` | ✅ Reutilizar | Origen / destino |
+| `lot_id` / `lot_name` | ✅ Reutilizar | Trazabilidad |
+| `package_id` / `result_package_id` | ✅ Reutilizar | Paquete origen / destino |
+| `owner_id` | ✅ Reutilizar | Propietario |
+| `state` (draft/waiting/confirmed/assigned/done) | ✅ Reutilizar | Máquina de estados |
+| `picking_id` | ✅ Reutilizar | Picking padre |
+| `origin` | ✅ Reutilizar | Documento origen |
+| `reference` | ✅ Reutilizar | Referencia legible |
+| Reservation logic | ✅ Reutilizar | `_action_assign()` maneja reservas |
+| Enlace a `wms.work` | 🆕 Crear WMS | Referencia al trabajo dirigido |
+
+---
+
+## 3. Pickings — `stock.picking` / `stock.picking.batch`
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| `stock.picking` completo | ✅ Reutilizar | Como **registro logístico** (Nivel A) |
+| `stock.picking.type` (Receipt, Internal, Delivery) | ✅ Reutilizar | Tipos de operación |
+| `stock.picking.batch` (batch + wave) | ✅ Reutilizar | Como agrupación logística |
+| Wave views en `stock_picking_batch` | ✅ Reutilizar | Vistas de wave incluidas en Community |
+| `stock.picking` como Work | ⚠️ **No usar** | ADR-002: `stock.picking ≠ wms.work` |
+
+---
+
+## 4. Paquetes / HU — `stock.quant.package`
+
+> **Nota importante**: En Odoo 19 el modelo se llama `stock.quant.package` (la clase Python es `QuantPackage`). La tabla en PostgreSQL es `stock_quant_package`. El modelo `stock.package` no existe como modelo independiente en Community estándar.
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| `name` (Package Reference) | ✅ Reutilizar | Identificador del paquete |
+| `package_type_id` | ✅ Reutilizar | **Ya existe** — link a tipo de paquete |
+| `parent_package_id` | ✅ Reutilizar | **Ya existe** — jerarquía padre (pack-in-pack) |
+| `location_id` | ✅ Reutilizar | **Ya existe** — ubicación actual |
+| `owner_id` | ✅ Reutilizar | **Ya existe** — propietario |
+| `shipping_weight` | ✅ Reutilizar | **Ya existe** — peso de envío |
+| `pack_date` | ✅ Reutilizar | **Ya existe** — fecha de empaque |
+| `quant_ids` | ✅ Reutilizar | **Ya existe** — contenido (relación a quants) |
+| `valid_sscc` | ❓ Verificar | Puede no existir en Community estándar — posiblemente módulo GS1/Enterprise |
+| HU lifecycle (state machine) | 🆕 Crear WMS | Estado del ciclo de vida WMS |
+| `seal_number` | 🆕 Crear WMS | Número de sello |
+| `hu_operational_class` | 🆕 Crear WMS | Clasificación operacional |
+| Work references | 🆕 Crear WMS | Enlace a `wms.work` |
+| HU operation history | 🆕 Crear WMS | Log de operaciones (pack, unpack, split, merge) |
+
+### `stock.package.type`
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| `height`, `width`, `length` | ✅ Reutilizar | **Ya existen** — dimensiones |
+| `base_weight` | ✅ Reutilizar | **Ya existe** — peso tara |
+| `max_weight` | ✅ Reutilizar | **Ya existe** — peso máximo |
+| `barcode` | ✅ Reutilizar | **Ya existe** — código de barras |
+| Storage capacities | ✅ Reutilizar | **Ya existe** — capacidades de almacenamiento |
+| `reusable` / `disposable` | ✅ Reutilizar | **Ya existe** |
+
+**Conclusión**: No necesitamos reconstruir jerarquía, dimensiones ni tipo de paquete. Solo agregar semántica WMS.
+
+---
+
+## 5. Ubicaciones — `stock.location`
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| Location hierarchy (parent/child) | ✅ Reutilizar | **Ya existe** |
+| `barcode` | ✅ Reutilizar | **Ya existe** |
+| `warehouse_id` | ✅ Reutilizar | **Ya existe** |
+| `removal_strategy_id` (FIFO/LIFO/FEFO/Closest) | ✅ Reutilizar | **Ya existe** |
+| `putaway_rule_ids` | ✅ Reutilizar | **Ya existe** — reglas básicas product→location |
+| `storage_category_id` | ✅ Reutilizar | **Ya existe** |
+| `cyclic_inventory_frequency` | ✅ Reutilizar | **Ya existe** — frecuencia de conteo |
+| `replenish_location` | ✅ Reutilizar | **Ya existe** |
+| `net_weight` / `forecast_weight` | ✅ Reutilizar | **Ya existe** |
+| `is_empty` | ✅ Reutilizar | **Ya existe** — computed |
+| Zone (agrupación por zona WMS) | 🔧 Extender | Odoo no tiene "zona" como concepto WMS |
+| Activity Area | 🆕 Crear WMS | Áreas de actividad |
+| Dock metadata | 🆕 Crear WMS | Tipo dock, estado, capacidades |
+| `pick_sequence` / `travel_sequence` | 🔧 Extender | Para optimización de recorrido |
+| Temperature range | 🔧 Extender | Rango de temperatura permitido |
+| Hazardous compatibility | 🔧 Extender | Clase de material peligroso permitido |
+| Max HU count | 🔧 Extender | Máximo de unidades de manejo |
+| Capacity volume | 🔧 Extender | Volumen máximo |
+
+---
+
+## 6. Bodega — `stock.warehouse`
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| `name`, `code`, `company_id` | ✅ Reutilizar | Identificación |
+| `partner_id` (address) | ✅ Reutilizar | Dirección |
+| `reception_steps` / `delivery_steps` | ✅ Reutilizar | 1/2/3 pasos |
+| `pick_type_id`, `pack_type_id`, `int_type_id` | ✅ Reutilizar | Tipos de operación |
+| Default locations (input, output, QC, pack) | ✅ Reutilizar | Ubicaciones default |
+| Routes | ✅ Reutilizar | `stock.route` |
+| WMS configuration | 🔧 Extender | Configuraciones WMS específicas |
+| Building structure | 🆕 Crear WMS | Edificios dentro de un complejo |
+
+---
+
+## 7. Rutas y Reglas — `stock.route` / `stock.rule`
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| `stock.route` (pull/push) | ✅ Reutilizar | Rutas de reabastecimiento |
+| `stock.rule` (procurement) | ✅ Reutilizar | Reglas de procurement |
+| Multi-step routes | ✅ Reutilizar | Pick-Pack-Ship configurable |
+| WMS-specific routing | 🆕 Crear WMS | Routing interno WMS (topología de bodega) |
+
+---
+
+## 8. Productos — `product.product` / `product.template`
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| `product.template` / `product.product` | ✅ Reutilizar | Maestro de productos |
+| `tracking` (none/lot/serial) | ✅ Reutilizar | Control por lote/serial |
+| `uom_id` / `uom_po_id` | ✅ Reutilizar | Unidades de medida |
+| `product.packaging` (name, qty, barcode) | ✅ Reutilizar | Packaging: Box of 12, Pallet of 48, etc. |
+| `weight` / `volume` | ✅ Reutilizar | Peso y volumen |
+| `use_expiration_date` / `expiration_date` | ✅ Reutilizar | Vida útil (en `stock.lot`) |
+| `categ_id` | ✅ Reutilizar | Categoría |
+| `barcode` | ✅ Reutilizar | Código de barras |
+| WMS Logistics Profile | 🆕 Crear WMS | Ver [Product Logistics Master](00-product-logistics-master.md) |
+| ABC class, velocity class | 🆕 Crear WMS | Clasificación de rotación |
+| Temperature class, hazmat class | 🆕 Crear WMS | Clases operacionales |
+| Pick UOM, case UOM, pallet UOM | 🔧 Extender | Vía `product.packaging` + perfil WMS |
+| Units per case, cases per layer, layers per pallet | 🆕 Crear WMS | Configuración logística |
+| Storage/putaway/replenishment/allocation profiles | 🆕 Crear WMS | Perfiles WMS |
+
+---
+
+## 9. Lotes — `stock.lot`
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| `name` | ✅ Reutilizar | Número de lote/serial |
+| `product_id` | ✅ Reutilizar | Producto |
+| `expiration_date` | ✅ Reutilizar | Expiración |
+| `use_date` | ✅ Reutilizar | Fecha de uso (best before) |
+| `removal_date` | ✅ Reutilizar | Fecha de remoción |
+| `alert_date` | ✅ Reutilizar | Fecha de alerta |
+| Quality status (WMS) | 🔧 Extender | Estado de calidad WMS a nivel de lote |
+
+---
+
+## 10. Removal Strategies
+
+| Estrategia | Estado | Detalle |
+|---|---|---|
+| FIFO (First In First Out) | ✅ Reutilizar | Por `in_date` |
+| LIFO (Last In First Out) | ✅ Reutilizar | |
+| FEFO (First Expired First Out) | ✅ Reutilizar | Por `expiration_date` |
+| Closest Location | ✅ Reutilizar | |
+| Full Pallet preference | 🆕 Crear WMS | |
+| Full Box preference | 🆕 Crear WMS | |
+| Least Fragmentation | 🆕 Crear WMS | |
+| Customer-specific rules | 🆕 Crear WMS | |
+
+---
+
+## 11. Storage Categories — `stock.storage.category`
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| Capacity by product | ✅ Reutilizar | **Ya existe** |
+| Capacity by package type | ✅ Reutilizar | **Ya existe** |
+| Capacity by weight | ✅ Reutilizar | **Ya existe** |
+| Allow new product (empty/same/mixed) | ✅ Reutilizar | **Ya existe** |
+| WMS temperature restrictions | 🔧 Extender | |
+| WMS hazmat restrictions | 🔧 Extender | |
+
+---
+
+## 12. Replenishment
+
+| Campo / Funcionalidad | Estado | Detalle |
+|---|---|---|
+| Reordering rules (min/max) | ✅ Reutilizar | En `stock.warehouse.orderpoint` |
+| Route-based replenishment | ✅ Reutilizar | Vía `stock.route` + `stock.rule` |
+| Demand-driven replenishment | 🆕 Crear WMS | |
+| Wave-driven replenishment | 🆕 Crear WMS | |
+| Top-off replenishment | 🆕 Crear WMS | |
+| Emergency replenishment | 🆕 Crear WMS | |
+| Pick face concept | 🆕 Crear WMS | Odoo no distingue Reserve vs Pick Face |
+
+---
+
+## 13. Funcionalidades 100% Nuevas (WMS)
+
+Estas no tienen equivalente en Odoo y se construyen completamente:
+
+| Dominio | Modelos principales |
+|---|---|
+| **Work Engine** | `wms.work`, `wms.work.line`, `wms.work_type`, `wms.work_class`, `wms.work_template` |
+| **Queue Engine** | `wms.queue`, `wms.queue.assignment` |
+| **Resource Engine** | `wms.resource`, `wms.resource.type`, `wms.certification` |
+| **Assignment Engine** | `wms.assignment` (scoring, claim, lease) |
+| **Rule Engine** | `wms.policy`, `wms.policy.condition`, `wms.policy.action` |
+| **RF/Mobile** | `wms.rf.session`, `wms.rf.command` |
+| **Exception Engine** | `wms.exception`, `wms.exception.type` |
+| **Inventory Events** | `wms.inventory.event` |
+| **Audit** | `wms.audit.log` |
+| **Integration** | `wms.outbox`, `wms.inbox`, `wms.integration.event` |
+| **Control Tower** | `wms.kpi`, `wms.alert` |
+| **ASN** | `wms.asn`, `wms.asn.line` |
+| **Dock/Yard** | `wms.dock`, `wms.appointment`, `wms.gate.visit` |
+| **Shipment** | `wms.shipment`, `wms.manifest` |
+| **Allocation** | `wms.allocation`, `wms.allocation.line` |
+| **Wave** | `wms.wave`, `wms.wave.template` |
+| **Product Logistics** | `wms.product.logistics` |
+
+---
+
+## Resumen Cuantitativo
+
+| Categoría | Cantidad de funcionalidades |
+|---|---|
+| ✅ Reutilizar tal cual | ~45 |
+| 🔧 Extender | ~12 |
+| 🆕 Crear nuevo | ~30+ modelos |
+| ⚠️ No tocar | 3 (identidad quant, merge logic, reservation internals) |
+
+> **Conclusión clave**: Odoo 19 Community aporta más del 40% de la infraestructura de datos que necesitamos. El WMS se construye **sobre** esta base, no **reemplazándola**.
+
+---
+
+*Documento nuevo para WMS Blueprint v1.1. Referencia cruzada: [ADR-011](../05-decisiones/01-adr.md), [ADR-012](../05-decisiones/01-adr.md), [ADR-013](../05-decisiones/01-adr.md).*

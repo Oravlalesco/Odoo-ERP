@@ -1,6 +1,8 @@
-# Resources — Recursos, Operadores, Equipos y Asignación
+# Resources — Recursos, Operadores, Equipos y Asignación (v1.1)
 
 > El WMS no modela al operario simplemente como un usuario. Crea una entidad completa que representa recursos humanos y mecánicos con capacidades, certificaciones y disponibilidad.
+>
+> **v1.1**: Corrige algoritmo de Assignment para evitar bloquear 50 Works durante cálculo de scores. Agrega race condition handling con retry.
 
 ---
 
@@ -147,7 +149,9 @@ La evolución puede ocurrir **sin cambiar el modelo operacional** — solo cambi
 
 ---
 
-## Flujo Completo: Request → Assignment → Execution
+## Flujo Completo: Request → Assignment → Execution (v1.1)
+
+> **⚠️ Corrección v1.1**: El scoring se calcula **sin locks**. Solo el claim final es atómico.
 
 ```mermaid
 sequenceDiagram
@@ -161,18 +165,40 @@ sequenceDiagram
     RE->>RE: Validar turno y disponibilidad
     OP->>RE: NEXT WORK
     RE->>AE: Solicitar trabajo para recurso
-    AE->>QE: Obtener trabajos compatibles
+    AE->>QE: Obtener trabajos compatibles (lectura sin lock)
     QE->>QE: Filter por queue + capabilities
-    QE->>QE: FOR UPDATE SKIP LOCKED
     QE-->>AE: Lista de candidatos
-    AE->>AE: Calcular scores
-    AE->>AE: Seleccionar mejor
-    AE->>WE: Asignar work al recurso
-    WE-->>OP: Work asignado con instrucciones
+    AE->>AE: Calcular scores (SIN locks en DB)
+    AE->>AE: Ordenar por score
+    AE->>WE: Atomic claim del mejor candidato (FOR UPDATE SKIP LOCKED)
+    alt Claim exitoso
+        WE-->>OP: Work asignado con instrucciones
+    else Claim fallido (ya tomado)
+        AE->>WE: Retry: claim del siguiente candidato
+        WE-->>OP: Work asignado
+    end
     OP->>WE: Scan + confirmar línea 1
     OP->>WE: Scan + confirmar línea 2
     WE->>WE: Work completado
     OP->>RE: NEXT WORK (ciclo)
+```
+
+### Race Condition Handling
+
+```text
+Operador A solicita work
+Operador B solicita work (simultáneo)
+
+  A: Calcula scores → mejor = Work 105
+  B: Calcula scores → mejor = Work 105
+
+  A: Atomic claim Work 105 → SUCCESS
+  B: Atomic claim Work 105 → SKIPPED (ya locked)
+
+  B: Retry → claim Work 106 → SUCCESS
+```
+
+El retry es automático y transparente para el operador. El scoring pre-calculado reduce el tiempo de lock al mínimo.
 ```
 
 ---

@@ -1,123 +1,144 @@
-# Handling Units — Unidades de Manejo
+# Handling Units — Industrialización de `stock.quant.package` (v1.1)
 
-> En un WMS industrial no se mueve solamente SKU. Se mueven pallets, cajas, contenedores y sus jerarquías. El HU Engine gestiona el ciclo de vida completo de las unidades de manejo.
+> Odoo 19 ya posee jerarquía de paquetes, dimensiones, SSCC y peso. No reconstruimos esa base. Industrializamos `stock.quant.package` agregando semántica WMS: ciclo de vida, operaciones, clasificación operacional y trazabilidad.
 
 ---
 
 ## Contexto
 
-### ¿Qué es una Handling Unit (HU)?
+### Cambio principal en v1.1
 
-Una **Handling Unit** (HU) — en español, **Unidad de Manejo** — es cualquier objeto físico que contiene mercadería y se mueve como una unidad dentro del almacén. No es el producto en sí, sino el *contenedor* que lo transporta.
+La documentación v1.0 proponía construir HU "sobre el paquete básico de Odoo" y mencionaba el modelo como `stock.package`.
 
-| Tipo de HU | En inglés | Descripción |
+**Correcciones**:
+
+1. El modelo real en Odoo 19 Community es **`stock.quant.package`** (clase Python `QuantPackage`, tabla `stock_quant_package`)
+2. Odoo 19 ya posee **mucho más** de lo que documentábamos: jerarquía, dimensiones, peso, tipos de paquete con capacidades
+
+> **ADR-013**: `stock.quant.package` es la base de Handling Units. No crearemos un modelo de HU separado.
+
+---
+
+## Lo que Odoo 19 YA posee
+
+### `stock.quant.package`
+
+| Campo | Significado | Ya existe |
 |---|---|---|
-| **Pallet** | Pallet | Plataforma de madera o plástico, generalmente 1.2m × 1.0m, sobre la que se apilan cajas |
-| **Caja** | Case/Carton | Caja de cartón o plástico que contiene unidades del producto |
-| **Tote** | Tote | Contenedor reutilizable plástico, usado en picking de piezas pequeñas |
-| **Bin** | Bin | Caja pequeña para almacenamiento de componentes |
-| **Contenedor** | Container | Contenedor grande para transporte o almacenamiento a granel |
-| **Paquete** | Parcel | Paquete individual preparado para envío |
+| `name` | Referencia del paquete (puede ser SSCC) | ✅ |
+| `package_type_id` | Tipo de paquete (dimensiones, peso, etc.) | ✅ |
+| `parent_package_id` | Paquete padre (pack-in-pack) — jerarquía | ✅ |
+| `child_package_ids` | Paquetes hijos (relación inversa) | ✅ |
+| `location_id` | Ubicación actual del paquete | ✅ |
+| `owner_id` | Propietario del paquete | ✅ |
+| `shipping_weight` | Peso de envío real | ✅ |
+| `pack_date` | Fecha de empaque | ✅ |
+| `quant_ids` | Contenido: quants dentro del paquete | ✅ |
+
+### `stock.package.type`
+
+| Campo | Significado | Ya existe |
+|---|---|---|
+| `name` | Nombre del tipo (ej: "Euro Pallet") | ✅ |
+| `height`, `width`, `length` | Dimensiones físicas | ✅ |
+| `base_weight` | Peso tara (peso del contenedor vacío) | ✅ |
+| `max_weight` | Peso máximo permitido | ✅ |
+| `barcode` | Código de barras del tipo de paquete | ✅ |
+| Storage capacities | Capacidades de almacenamiento por categoría | ✅ |
+
+**Conclusión**: No necesitamos reconstruir jerarquía, dimensiones, tipo de paquete ni peso. Esto reduce significativamente el esfuerzo de la Fase HU.
 
 ---
 
-## Propósito
+## Lo que el WMS agrega
 
-Modelar las unidades de manejo con semántica logística completa:
+### Extensiones a `stock.quant.package`
 
-1. **Identificación única** de cada HU a lo largo de toda la cadena (SSCC)
-2. **Jerarquía de empaque**: un pallet contiene cajas, una caja contiene unidades
-3. **Operaciones físicas**: crear, empacar, desempacar, dividir, fusionar, mover, despachar
-4. **Trazabilidad**: saber en todo momento dónde está cada HU y qué contiene
+| Campo nuevo | En inglés | Significado |
+|---|---|---|
+| `hu_state` | HU State | Estado del ciclo de vida: `EMPTY`, `OPEN`, `CLOSED`, `IN_TRANSIT`, `SHIPPED`, `RETURNED`, `DISPOSED` |
+| `hu_class` | HU Operational Class | Clasificación: `PALLET`, `CASE`, `TOTE`, `CONTAINER`, `MIXED` |
+| `seal_number` | Seal Number | Número de sello de seguridad (para transporte) |
+| `sscc` | SSCC | Serial Shipping Container Code (GS1-128) — puede ser el `name` si se valida |
+| `gtin` | GTIN | Global Trade Item Number del contenedor |
+| `label_state` | Label State | Estado de la etiqueta GS1: `PENDING`, `PRINTED`, `APPLIED`, `DAMAGED` |
+| `current_work_id` | Current Work | Work activo asociado a esta HU |
+| `last_work_id` | Last Work | Último Work completado sobre esta HU |
+| `weight_gross` | Gross Weight | Peso bruto real (tara + contenido) |
+| `weight_net` | Net Weight | Peso neto (solo contenido) |
 
----
+### Ciclo de Vida de la HU
 
-## Diseño Funcional
-
-### Identificación: SSCC
-
-Cada HU se identifica mediante un **SSCC (Serial Shipping Container Code)** — en español, **Código de Contenedor de Envío Serial**. Es un estándar definido por GS1 que asigna un número único global de 18 dígitos a cada unidad logística.
-
-El SSCC permite que cualquier participante de la cadena de suministro identifique inequívocamente un pallet o caja mediante el escaneo de un código de barras.
-
-### Jerarquía de Empaque
-
-Las HUs pueden anidarse. Un pallet puede contener cajas, y una caja puede contener productos de distintos SKUs:
-
-```text
-PALLET (SSCC: 780...)
-  │
-  ├ BOX (SSCC: 780...01)
-  │ └ SKU-A × 24
-  │
-  ├ BOX (SSCC: 780...02)
-  │ └ SKU-A × 24
-  │
-  └ BOX (SSCC: 780...03)
-    ├ SKU-B × 10
-    └ SKU-C × 6
+```mermaid
+stateDiagram-v2
+    [*] --> EMPTY: Crear HU
+    EMPTY --> OPEN: Pack (agregar contenido)
+    OPEN --> OPEN: Pack más / Unpack parcial
+    OPEN --> CLOSED: Cerrar y sellar
+    CLOSED --> IN_TRANSIT: Cargar en transporte
+    IN_TRANSIT --> SHIPPED: Confirmar despacho
+    SHIPPED --> RETURNED: Devolución
+    RETURNED --> OPEN: Reabrir para inspección
+    OPEN --> EMPTY: Unpack total
+    EMPTY --> DISPOSED: Dar de baja
+    CLOSED --> OPEN: Reabrir
 ```
 
 ### Operaciones sobre HU
 
-| Operación | En inglés | Significado |
-|---|---|---|
-| **Crear** | Create | Dar de alta una nueva HU vacía o con contenido |
-| **Empacar** | Pack | Agregar producto o una HU hija dentro de una HU padre |
-| **Desempacar** | Unpack | Extraer producto o una HU hija de una HU padre |
-| **Dividir** | Split | Separar parte del contenido de una HU en una nueva HU |
-| **Fusionar** | Merge | Combinar el contenido de dos o más HUs en una sola |
-| **Anidar** | Nest | Colocar una HU dentro de otra (ej: cajas en pallet) |
-| **Desanidar** | Unnest | Sacar una HU hija de su HU padre |
-| **Sellar** | Seal | Cerrar la HU y marcarla como completa |
-| **Mover** | Move | Trasladar la HU de una ubicación a otra |
-| **Re-etiquetar** | Relabel | Cambiar o actualizar la etiqueta/SSCC de la HU |
-| **Consumir** | Consume | Marcar la HU como utilizada/vaciada |
-| **Despachar** | Ship | Enviar la HU fuera del almacén |
+| Operación | En inglés | Significado | Genera Work |
+|---|---|---|---|
+| **Crear** | Create | Registrar una HU nueva en el sistema | No |
+| **Empacar** | Pack | Agregar contenido a la HU | Sí |
+| **Desempacar** | Unpack | Retirar contenido de la HU | Sí |
+| **Dividir** | Split | Dividir una HU en dos o más | Sí |
+| **Consolidar** | Merge | Combinar contenido de dos HU en una | Sí |
+| **Cerrar** | Close | Sellar, pesar, etiquetar | Sí |
+| **Reabrir** | Reopen | Abrir HU sellada para inspección o corrección | Sí (con autorización) |
+| **Mover** | Move | Mover la HU completa a otra ubicación | Sí |
+| **Disponer** | Dispose | Dar de baja la HU (destruir, reciclar) | No |
 
-### Ciclo de Vida
+Cada operación genera un registro en `wms.hu.operation` para trazabilidad:
 
-```mermaid
-stateDiagram-v2
-    [*] --> Created: Crear
-    Created --> Open: Abrir para empaque
-    Open --> Open: Pack / Unpack
-    Open --> Sealed: Sellar
-    Sealed --> InTransit: Mover
-    InTransit --> Stored: Putaway
-    Stored --> InTransit: Pick
-    InTransit --> Staged: Stage
-    Staged --> Loaded: Load
-    Loaded --> Shipped: Ship
-    Shipped --> [*]
-    
-    Open --> Split: Dividir
-    Split --> Open
-    Open --> Merged: Fusionar
-    Sealed --> Consumed: Vaciar/consumir
-```
+### HU Operation History (`wms.hu.operation`)
+
+| Campo | Significado |
+|---|---|
+| `package_id` | HU afectada |
+| `operation_type` | Tipo de operación |
+| `operator_id` | Quién ejecutó |
+| `device_id` | Desde qué dispositivo |
+| `timestamp` | Cuándo |
+| `work_id` | Work asociado |
+| `details` | Detalles específicos (ej: qué quants se agregaron/removieron) |
+| `correlation_id` | ID de correlación |
 
 ---
 
-## Modelo de Datos
+## SSCC — Serial Shipping Container Code
 
-### Atributos de una HU
+### ¿Qué es?
 
-| Campo | Tipo | Significado |
-|---|---|---|
-| `sscc` | String (18) | Código SSCC único global |
-| `hu_type` | Selection | Tipo: PALLET, CASE, TOTE, BIN, CONTAINER, PARCEL |
-| `parent_id` | Many2one | HU padre (para jerarquía) |
-| `state` | Selection | Estado del ciclo de vida |
-| `location_id` | Many2one | Ubicación actual en el almacén |
-| `weight_gross` | Float | Peso bruto (contenido + empaque) |
-| `weight_net` | Float | Peso neto (solo contenido) |
-| `height` | Float | Altura |
-| `width` | Float | Ancho |
-| `length` | Float | Largo |
-| `volume` | Float | Volumen calculado |
-| `seal_number` | String | Número de sello de seguridad |
-| `label_printed` | Boolean | Si la etiqueta fue impresa |
+**SSCC** (Serial Shipping Container Code) es un identificador único global de 18 dígitos asignado a cada unidad logística (pallet, caja, contenedor) siguiendo el estándar GS1.
+
+```text
+(00) 1 7601234 000000001 2
+ AI  E  GCP     Serial   Check
+```
+
+| Componente | Significado |
+|---|---|
+| AI `(00)` | Application Identifier: indica que es un SSCC |
+| Extension digit | Dígito de extensión (aumenta capacidad de numeración) |
+| GCP | Global Company Prefix (identificador de la empresa) |
+| Serial | Número secuencial único |
+| Check digit | Dígito verificador |
+
+### Implementación
+
+Odoo 19 tiene un campo `valid_sscc` que puede existir como validación, pero la generación y gestión del ciclo de vida de etiquetas GS1 será responsabilidad del módulo WMS.
+
+El `name` de `stock.quant.package` **puede ser el SSCC** cuando el paquete lo requiera.
 
 ---
 
@@ -125,22 +146,25 @@ stateDiagram-v2
 
 ### Modelos Reutilizados
 
-| Modelo | Qué aporta |
+| Modelo | Qué reutilizamos |
 |---|---|
-| `stock.quant.package` | Concepto base de "paquete" en Odoo — ya maneja jerarquía padre-hijo |
+| `stock.quant.package` | **Base completa** de HU: jerarquía, ubicación, propietario, contenido |
+| `stock.package.type` | **Base completa** de tipo de paquete: dimensiones, peso, capacidades |
 
 ### Modelos Extendidos
 
 | Modelo | Extensión |
 |---|---|
-| `stock.quant.package` | Agregar: `sscc`, `hu_type`, `state`, dimensiones, peso, `seal_number` |
+| `stock.quant.package` | Campos: `hu_state`, `hu_class`, `seal_number`, `sscc`, `gtin`, `label_state`, `current_work_id`, `weight_gross`, `weight_net` |
 
 ### Modelos Nuevos
 
 | Modelo | Propósito |
 |---|---|
-| `wms.hu.type` | Catálogo de tipos de HU con dimensiones y pesos estándar |
-| `wms.hu.operation` | Registro de operaciones sobre HUs (pack, unpack, split, merge, etc.) |
+| `wms.hu.operation` | Historial de operaciones sobre HU |
+| `wms.sscc.sequence` | Generador de SSCC con GCP configurable |
+
+> **Nota**: Ya **no** se propone `wms.handling.unit` como modelo independiente. La HU ES `stock.quant.package` extendido.
 
 ---
 
@@ -148,20 +172,13 @@ stateDiagram-v2
 
 ```mermaid
 graph LR
-    HU["03 Handling Units"] --> INV["02 Inventory"]
+    WM["01 Warehouse Master"] --> HU["03 Handling Units"]
+    HU --> INV["02 Inventory"]
     HU --> WE["04 Work Execution"]
+    HU --> PACK["11 Packing & Shipping"]
     HU --> IN["07 Inbound"]
-    HU --> PK["12 Picking"]
-    HU --> PC["13 Packing & Shipping"]
-    WM["01 Warehouse Master"] --> HU
 ```
 
 ---
 
-## Referencias
-
-- [GS1 — SSCC / Logistic Label Guideline](https://www.gs1.org/standards/gs1-logistic-label-guideline/current-standard)
-
----
-
-*Documento derivado de la sección 7 del [Plan Maestro](../plan.md).*
+*Documento corregido en v1.1. Cambios principales: corregido nombre del modelo a `stock.quant.package` (ADR-013), documentados campos que ya existen, eliminada propuesta de modelo HU separado, enfoque cambiado a "industrializar stock.quant.package".*

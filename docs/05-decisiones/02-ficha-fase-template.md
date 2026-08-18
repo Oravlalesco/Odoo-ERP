@@ -81,6 +81,30 @@ Lista de modelos nuevos con campos detallados.
 ## Índices DB
 Índices de base de datos necesarios para performance.
 
+## Invariantes (v1.1)
+Condiciones que siempre deben ser verdaderas. Ej: "reserved_quantity <= quantity".
+
+## Transaction Boundary (v1.1)
+Qué tablas se tocan en cada transacción y su SLO de duración.
+
+## Idempotency Contract (v1.1)
+Qué operaciones son idempotentes y cómo se garantiza (idempotency_key, command_id).
+
+## Failure Recovery (v1.1)
+Qué pasa si: pod crash, network loss, partial commit. Comportamiento esperado.
+
+## Data Ownership (v1.1)
+Qué dominio es dueño de cada modelo/campo. Quién puede modificar qué.
+
+## Migration Impact (v1.1)
+¿Esta fase agrega/modifica tablas? ¿Las migraciones son backward-compatible?
+
+## Performance Budget (v1.1)
+Tiempo máximo por operación. Ej: "claim < 50ms p99".
+
+## SLO (v1.1)
+Service Level Objectives medibles para esta fase.
+
 ## Dependencias
 Fases o componentes que deben existir antes.
 

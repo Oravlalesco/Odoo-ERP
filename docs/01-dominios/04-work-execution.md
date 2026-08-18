@@ -1,6 +1,8 @@
-# Work Execution — Motor de Trabajo y Motor de Colas
+# Work Execution — Motor de Trabajo y Motor de Colas (v1.1)
 
 > El componente más importante de toda la plataforma. Transforma necesidades logísticas en unidades de trabajo ejecutables y las distribuye a través de colas a los recursos disponibles.
+>
+> **v1.1**: Agrega Work Lease Protocol, corrige modelo de crash recovery, agrega estados CLAIMED y RECLAIMABLE (ADR-015/016).
 
 ---
 
@@ -66,7 +68,7 @@ Line 20
 
 | Modelo | En inglés | Propósito |
 |---|---|---|
-| `wms.work` | Work | Registro de trabajo con estado, prioridad, tipo, recurso asignado |
+| `wms.work` | Work | Registro de trabajo con estado, prioridad, tipo, recurso asignado, **lease** |
 | `wms.work.line` | Work Line | Cada paso del trabajo: acción (PICK/PUT), ubicación, producto, cantidad |
 | `wms.work_type` | Work Type | Catálogo de tipos de trabajo (pick, put, move, count...) |
 | `wms.work_class` | Work Class | Clasificación para agrupación y priorización (ej: "putaway-forklift", "pick-manual") |
@@ -74,13 +76,33 @@ Line 20
 | `wms.work_dependency` | Work Dependency | Relaciones de precedencia: "Work B no puede empezar hasta que Work A termine" |
 | `wms.work_exception` | Work Exception | Registro de excepciones ocurridas durante la ejecución |
 
-### Máquina de Estados del Work
+### Campos de Lease en `wms.work` (v1.1)
+
+> **ADR-015**: Work assignment usa lease + atomic claim.
+>
+> **ADR-016**: Work transactions are short-lived.
+
+Cuando un operador solicita trabajo, no mantenemos una transacción PostgreSQL abierta durante 5 minutos mientras trabaja. La asignación se hace con un **claim atómico** (transacción corta) y luego un **lease** (arrendamiento temporal) protege la asignación.
+
+| Campo | En inglés | Significado |
+|---|---|---|
+| `claim_token` | Claim Token | Token único generado al momento del claim (UUID) |
+| `assigned_resource_id` | Assigned Resource | Recurso (operador) asignado |
+| `assigned_at` | Assigned At | Timestamp de asignación |
+| `accepted_at` | Accepted At | Timestamp cuando el operador aceptó (escaneó primer item) |
+| `lease_expires_at` | Lease Expires At | Cuándo expira el arrendamiento si no hay heartbeat |
+| `last_heartbeat_at` | Last Heartbeat At | Último heartbeat recibido del dispositivo RF |
+| `assignment_version` | Assignment Version | Versión incremental — evita race conditions en reasignación |
+| `reclaim_count` | Reclaim Count | Cuántas veces se ha reclamado este work (detect problematic work) |
+
+### Máquina de Estados del Work (v1.1)
 
 ```mermaid
 stateDiagram-v2
     [*] --> Draft: Creado
     Draft --> Ready: Validado y listo
-    Ready --> Assigned: Asignado a recurso
+    Ready --> Claimed: Atomic claim
+    Claimed --> Assigned: Operador confirmado
     Assigned --> InProgress: Operador acepta
     InProgress --> InProgress: Línea completada
     InProgress --> Completed: Todas las líneas completadas
@@ -88,6 +110,10 @@ stateDiagram-v2
     Exception --> InProgress: Resuelto
     Exception --> Cancelled: No resoluble
     Ready --> Cancelled: Cancelado
+    Assigned --> Reclaimable: Lease expirado
+    InProgress --> Reclaimable: Heartbeat perdido
+    Reclaimable --> Ready: Auto-requeue
+    Reclaimable --> Assigned: Supervisor reasigna
     Completed --> [*]
     Cancelled --> [*]
 ```
@@ -96,10 +122,12 @@ stateDiagram-v2
 |---|---|---|
 | **Borrador** | Draft | Creado pero no validado |
 | **Listo** | Ready | Validado, esperando asignación |
-| **Asignado** | Assigned | Asignado a un recurso específico |
+| **Reclamado** | Claimed | Claim atómico ejecutado (transacción corta) — transitorio |
+| **Asignado** | Assigned | Asignado a un recurso confirmado |
 | **En Progreso** | In Progress | El operador está ejecutando las líneas |
 | **Completado** | Completed | Todas las líneas ejecutadas exitosamente |
 | **Excepción** | Exception | Un problema detuvo la ejecución |
+| **Reclamable** | Reclaimable | Lease expirado — disponible para reasignación |
 | **Cancelado** | Cancelled | Trabajo cancelado |
 
 ### Generación de Work
@@ -249,7 +277,96 @@ Operador C → Work 12    (Work 10 y 11 saltados, toma Work 12)
 | No hay doble asignación | `FOR UPDATE SKIP LOCKED` |
 | No hay espera entre operadores | `SKIP LOCKED` salta filas bloqueadas |
 | Consistencia transaccional | PostgreSQL ACID |
-| Recuperación ante crash | Si un operador se desconecta, la transacción se revierte y el Work vuelve a `ready` |
+| Claim atómico | Transacción de claim < 50ms, luego COMMIT |
+
+### ⚠️ Corrección v1.1: Crash Recovery
+
+La v1.0 afirmaba que si un operador se desconecta, "la transacción se revierte y el Work vuelve a `ready`".
+
+**Esto es INCORRECTO.**
+
+La asignación de Work es un `COMMIT` atómico corto:
+
+```sql
+BEGIN;
+UPDATE wms_work SET state='assigned', assigned_resource_id=129, 
+  claim_token='uuid', assigned_at=now(), lease_expires_at=now()+'10min'
+WHERE id=10592;
+COMMIT;
+```
+
+Después del `COMMIT`, el Work está en estado `ASSIGNED`. Si el operador se desconecta, **no hay transacción abierta que revertir**.
+
+### Work Lease Protocol
+
+La recuperación ante desconexión funciona mediante **lease** (arrendamiento temporal):
+
+```text
+1. CLAIM (atomic, <50ms)
+   Work: READY → CLAIMED → ASSIGNED
+   lease_expires_at = now() + 10 min
+
+2. HEARTBEAT (cada 30-60 segundos)
+   RF envía heartbeat
+   last_heartbeat_at = now()
+   lease_expires_at = now() + 10 min  (renovación)
+
+3. EXECUTION (operador trabaja)
+   Cada scan/confirmación renueva el lease
+   Work: ASSIGNED → IN_PROGRESS
+
+4. Si RF se desconecta:
+   No llegan más heartbeats
+   Después de 10 min: lease_expires_at < now()
+   
+5. RECLAIM (cron job o supervisor)
+   Detecta: lease expirado + no heartbeat
+   Work: ASSIGNED/IN_PROGRESS → RECLAIMABLE
+   
+6. RESOLUCIÓN:
+   a) Auto-requeue: RECLAIMABLE → READY (otro operador lo toma)
+   b) Supervisor: RECLAIMABLE → ASSIGNED (reasignar manualmente)
+   c) Si el operador original vuelve: puede reclamar con claim_token
+```
+
+### Ejemplo: Operador pierde Wi-Fi
+
+```text
+17:14:02  Operador 129 claims Work 10592
+         state=ASSIGNED, lease_expires=17:24:02
+
+17:14:30  Heartbeat
+         lease_expires=17:24:30
+
+17:15:02  Confirm pick line 1
+         state=IN_PROGRESS, lease_expires=17:25:02
+
+17:15:15  *** Wi-Fi lost ***
+
+17:25:02  Lease expired. No heartbeat en 10 min.
+         state=RECLAIMABLE
+
+17:25:03  Scheduler job detecta RECLAIMABLE
+         reclaim_count=1
+         Si reclaim_count < max_reclaims: state=READY
+         Otro operador puede tomarlo
+
+17:28:00  Operador 129 reconecta
+         Intenta reclamar con claim_token → FAIL (ya en READY)
+         Solicita nuevo Work
+```
+
+### Trabajo Parcialmente Completado
+
+Si un Work en IN_PROGRESS se convierte en RECLAIMABLE y tiene líneas ya completadas:
+
+```text
+Work 10592:
+  Line 10: PICK from A03 → COMPLETED ✓
+  Line 20: PUT to B07 → PENDING
+```
+
+El nuevo operador que tome el work verá solo las líneas pendientes. Las líneas ya confirmadas no se re-ejecutan. El `assignment_version` se incrementa para trazabilidad.
 
 ---
 
@@ -280,4 +397,4 @@ graph LR
 
 ---
 
-*Documento derivado de las secciones 8-9 y 12 del [Plan Maestro](../plan.md).*
+*Documento derivado de las secciones 8-9 y 12 del [Plan Maestro](../plan.md). Corregido en v1.1: Work Lease Protocol (ADR-015/016), crash recovery, estados CLAIMED/RECLAIMABLE.*

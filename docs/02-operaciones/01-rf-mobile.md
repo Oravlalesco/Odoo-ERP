@@ -1,6 +1,8 @@
-# RF / WMS Mobile — Cliente Móvil para Operadores
+# RF / WMS Mobile — Cliente Móvil para Operadores (v1.1)
 
 > Interface propia de radiofrecuencia diseñada para operación dirigida en piso. Pantallas extremadamente simples, comunicación vía HTTPS y conexión directa al Work Engine.
+>
+> **v1.1**: Detalla RF Offline Protocol, agrega command journal, corrige "offline-capable" de bullet point a especificación técnica (ADR-017).
 
 ---
 
@@ -52,7 +54,6 @@ Odoo ORM (Base de datos)
 | **Scan-driven** | El operador avanza escaneando, no navegando menús |
 | **Sin decisiones** | El sistema decide, el operador ejecuta |
 | **Tolerante a errores** | Si el operador escanea algo incorrecto, se muestra un error claro y puede reintentar |
-| **Offline-capable** | Funcionar con conectividad intermitente |
 
 ---
 
@@ -136,10 +137,100 @@ ACTUAL:
 
 ---
 
+## RF Offline Protocol (v1.1)
+
+> **ADR-017**: RF offline solo ejecuta Work previamente asignado.
+
+### ¿Qué significa "offline"?
+
+No significa que el operador pueda trabajar indefinidamente sin conexión. Significa que ante una **interrupción temporal de conectividad** (Wi-Fi inestable, zona muerta del almacén), el operador puede continuar ciertos pasos del Work que ya tiene asignado.
+
+### Lo que SÍ se permite offline
+
+| Acción | Offline | Razón |
+|---|---|---|
+| Continuar Work ya asignado | ✅ | El operador ya tiene la instrucción |
+| Ejecutar pasos de scan/confirm | ✅ | Se registran localmente |
+| Reportar excepciones | ✅ | Se encolan para sync |
+
+### Lo que NO se permite offline
+
+| Acción | Offline | Razón |
+|---|---|---|
+| Solicitar nuevo Work | ❌ | Requiere `FOR UPDATE SKIP LOCKED` — imposible sin DB |
+| Allocation de inventario | ❌ | Requiere transacción atómica sobre quants |
+| Aprobar excepciones | ❌ | Requiere validación del supervisor |
+
+### Command Journal
+
+Cada acción del operador se registra localmente en un **command journal** (diario de comandos) en el dispositivo:
+
+| Campo | Significado |
+|---|---|
+| `command_id` | UUID único del comando |
+| `device_id` | Identificador del dispositivo RF |
+| `work_id` | Work al que pertenece |
+| `work_version` | Versión del assignment (para detectar reasignaciones) |
+| `sequence` | Número secuencial del comando |
+| `timestamp` | Timestamp local del dispositivo |
+| `command_type` | Tipo: `SCAN_LOCATION`, `SCAN_PRODUCT`, `CONFIRM_PICK`, `CONFIRM_PUT`, `REPORT_SHORT`, `REPORT_DAMAGE` |
+| `payload` | Datos del comando (barcode escaneado, cantidad, etc.) |
+
+### Ejemplo: Operador pierde Wi-Fi durante picking
+
+```text
+17:15:02  ONLINE   Confirm pick line 1 → enviado al server ✓
+17:15:15  *** Wi-Fi lost ***
+17:15:30  OFFLINE  Scan location A03-R02-L02 → journal local
+17:15:45  OFFLINE  Scan product SKU-B → journal local
+17:15:55  OFFLINE  Confirm pick qty=12 → journal local
+17:16:10  *** Wi-Fi restored ***
+17:16:11  SYNC     Replay command journal:
+                     command_1: SCAN_LOCATION → OK
+                     command_2: SCAN_PRODUCT → OK
+                     command_3: CONFIRM_PICK → OK (idempotent)
+```
+
+### Replay Idempotente
+
+El replay al reconectar es **idempotente**:
+
+```text
+Server recibe: CONFIRM_PICK(command_id=uuid-123, work_id=10592, ...)
+
+1. ¿Este command_id ya fue procesado?
+   → Sí: retornar OK sin reprocesar
+   → No: ejecutar normalmente
+```
+
+### Conflicto: Work fue reasignado
+
+```text
+Operador A pierde Wi-Fi, sigue trabajando offline
+Server: lease expira → Work RECLAIMABLE → READY
+Operador B toma el Work → assignment_version=2
+
+Operador A reconecta, intenta replay:
+  work_version en journal = 1
+  work_version actual = 2
+  → CONFLICT: Work fue reasignado
+  → Descartar journal, notificar operador
+```
+
+### Límites del Modo Offline
+
+| Límite | Valor | Razón |
+|---|---|---|
+| **Duración máxima** | 10 minutos (configurable) | Después, el lease expira y el Work puede ser reasignado |
+| **Comandos máximos** | 50 | Prevenir journals enormes |
+| **Tipos permitidos** | Solo ejecución | No planning ni allocation |
+
+---
+
 ## Referencia
 
 Dynamics 365 y SAP EWM tienen interfaces mobile/RF explícitamente centradas en ejecución dirigida de trabajo, validando que este enfoque es estándar en la industria.
 
 ---
 
-*Documento derivado de la sección 34 del [Plan Maestro](../plan.md).*
+*Documento derivado de la sección 34 del [Plan Maestro](../plan.md). Corregido en v1.1: RF Offline Protocol (ADR-017), command journal, replay idempotente.*

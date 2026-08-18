@@ -1,168 +1,188 @@
-# Rule Engine — Motor de Reglas Configurables
+# Rule Engine — Typed Policy Engine (v1.1)
 
-> Políticas configurables y declarativas que controlan el comportamiento del WMS sin escribir código. Versionadas, auditables, testeables y simulables.
+> Motor de políticas tipadas que configura el comportamiento de los motores WMS sin cambios de código. Cada dominio define sus propios tipos de políticas con acciones explícitamente whitelisted.
+>
+> **v1.1**: Cambia de Rule Engine genérico a Typed Policy Engine. Elimina `safe_eval`. Acciones whitelisted por dominio (ADR-018).
 
 ---
 
 ## Contexto
 
-### El Problema
+### Cambio principal en v1.1
 
-Sin un motor de reglas, un WMS termina con cientos de condiciones hardcodeadas:
+La v1.0 proponía un motor de reglas genérico donde cualquier condición podía ejecutar cualquier acción. Esto presenta riesgos:
 
-```python
-if warehouse == 'SCL01':
-    if product.category == 'FROZEN':
-        if hu_type == 'PALLET':
-            zone = 'FREEZER'
-```
+| Riesgo | Descripción |
+|---|---|
+| **Complejidad prematura** | Construir un BPM/rule engine genérico antes de necesitarlo |
+| **Seguridad** | `safe_eval` permite ejecución de código arbitrario |
+| **Validación** | Reglas genéricas son difíciles de validar y simular |
+| **Debugging** | Cuando algo falla, ¿qué regla causó el problema? |
 
-Este enfoque es:
-- **Frágil**: cada cambio de negocio requiere modificación de código
-- **Opaco**: el equipo de operaciones no puede ver ni entender las reglas
-- **No testeable**: imposible simular el impacto de un cambio antes de aplicarlo
-- **No auditable**: no hay registro de cuándo cambió una regla ni quién la cambió
-
-### La Solución
-
-Un **Rule Engine** (Motor de Reglas) que permite definir el comportamiento del WMS de forma **declarativa** — es decir, describiendo *qué* debe suceder bajo qué condiciones, en lugar de programar *cómo*.
+> **ADR-018**: Rule Engine usa DSL tipada sin `safe_eval`.
 
 ---
 
-## Propósito
+## Typed Policy Engine
 
-Crear un sistema de reglas que:
-1. Sea **configurable** desde la interfaz administrativa sin tocar código
-2. Sea **declarativo**: condiciones y acciones claras
-3. Sea **versionado**: cada cambio queda registrado
-4. Sea **simulable**: poder probar el impacto antes de activar
+### Concepto
+
+En lugar de un motor genérico `IF X THEN Y`, cada dominio define su **tipo de política** (*Policy Type*) con:
+
+1. **Condiciones** específicas de ese dominio
+2. **Acciones** explícitamente whitelisted para ese dominio
+3. **Evaluación** determinista y tipada
+
+### Modelo: `wms.policy`
+
+| Campo | Significado |
+|---|---|
+| `name` | Nombre descriptivo |
+| `policy_type` | Tipo: `PUTAWAY`, `ALLOCATION`, `REPLENISHMENT`, `QUEUE_ELIGIBILITY`, `WAVE_GROUPING` |
+| `warehouse_id` | Bodega donde aplica (o todas) |
+| `priority` | Orden de evaluación |
+| `version` | Versión de la política |
+| `active` | Activa/inactiva |
+| `valid_from` / `valid_to` | Rango de vigencia |
+| `condition_ids` | Lista de condiciones |
+| `action_ids` | Lista de acciones |
 
 ---
 
-## Diseño Funcional
+## Políticas por Dominio
 
-### Modelos Propuestos
+### Putaway Policy
 
-| Modelo | En inglés | Propósito |
+**Condiciones disponibles** (whitelisted):
+
+| Condición | Significado | Ejemplo |
 |---|---|---|
-| `wms.rule` | Rule | Regla individual con nombre, dominio de aplicación y prioridad |
-| `wms.rule_condition` | Rule Condition | Cada condición que debe cumplirse (IF) |
-| `wms.rule_action` | Rule Action | Cada acción que se ejecuta cuando se cumplen las condiciones (THEN) |
-| `wms.rule_set` | Rule Set | Agrupación de reglas para un dominio específico |
-| `wms.rule_version` | Rule Version | Versión específica de un conjunto de reglas con fecha de activación |
+| `PRODUCT_CATEGORY` | Categoría del producto | Alimentos, electrónica |
+| `TEMPERATURE_CLASS` | Clase de temperatura | FROZEN, CHILLED |
+| `HAZMAT_CLASS` | Clase hazmat | CLASS_3 |
+| `ABC_CLASS` | Clasificación de rotación | A, B, C |
+| `HU_TYPE` | Tipo de unidad de manejo | PALLET, CASE |
+| `WEIGHT_RANGE` | Rango de peso | 0-500kg, 500-1200kg |
+| `OWNER` | Propietario (3PL) | COMPANY-A |
 
-### Dominios de Aplicación
+**Acciones disponibles** (whitelisted):
 
-Las reglas son transversales — se aplican a múltiples procesos del WMS:
+| Acción | Significado |
+|---|---|
+| `INCLUDE_ZONE` | Incluir zona como candidata |
+| `EXCLUDE_ZONE` | Excluir zona |
+| `REQUIRE_STORAGE_TYPE` | Requerir tipo de almacenamiento |
+| `REQUIRE_STORAGE_CATEGORY` | Requerir categoría de almacenamiento |
+| `ADD_SCORE` | Agregar score a un candidato |
+| `SET_CONSOLIDATION` | Preferir consolidación con mismo SKU/lote |
+| `SET_PROXIMITY` | Preferir cercanía a zona de despacho |
 
-| Dominio | En inglés | Ejemplo de regla |
-|---|---|---|
-| **Almacenamiento** | Putaway | "Si temperatura=FROZEN y HU=PALLET, entonces zona=FREEZER" |
-| **Asignación** | Allocation | "Si cliente=PREMIUM, entonces FEFO y full pallet primero" |
-| **Reposición** | Replenishment | "Si pick_face < min, entonces reponer hasta max" |
-| **Olas** | Wave | "Agrupar por carrier + zona, cutoff 16:00" |
-| **Trabajo** | Work | "Pick manual < 20kg, forklift >= 20kg" |
-| **Colas** | Queue | "Cola HAZMAT requiere certificación clase 3" |
-| **Picking** | Picking | "Zona A = batch picking, Zona B = zone picking" |
-| **Empaque** | Packing | "Si frágil, agregar protección" |
-| **Calidad** | Quality | "Si proveedor nuevo, inspección 100%" |
-| **Despacho** | Shipping | "Si peso > 30kg, requiere dos operadores para carga" |
+### Allocation Policy
 
-### Estructura de una Regla
+**Condiciones disponibles**:
+
+| Condición | Significado |
+|---|---|
+| `PRODUCT_CATEGORY` | Categoría del producto |
+| `CUSTOMER_ID` | Cliente específico |
+| `ROUTE_ID` | Ruta de transporte |
+| `ORDER_PRIORITY` | Prioridad del pedido |
+| `SHELF_LIFE_REMAINING` | Vida útil restante |
+
+**Acciones disponibles**:
+
+| Acción | Significado |
+|---|---|
+| `SET_REMOVAL_STRATEGY` | FIFO, FEFO, LIFO, CLOSEST |
+| `PREFER_FULL_PALLET` | Preferir pallets completos |
+| `PREFER_FULL_CASE` | Preferir cajas completas |
+| `MINIMIZE_FRAGMENTATION` | Minimizar ubicaciones distintas |
+| `REQUIRE_LOT_CERTIFICATION` | Solo lotes certificados |
+
+### Queue Eligibility Policy
+
+**Condiciones disponibles**:
+
+| Condición | Significado |
+|---|---|
+| `RESOURCE_ZONE` | Zona del operador |
+| `RESOURCE_CERTIFICATION` | Certificación requerida |
+| `EQUIPMENT_TYPE` | Tipo de equipo |
+| `WORK_TYPE` | Tipo de trabajo |
+| `WORK_CLASS` | Clase de trabajo |
+
+**Acciones disponibles**:
+
+| Acción | Significado |
+|---|---|
+| `ALLOW` | Permitir asignación |
+| `DENY` | Denegar asignación |
+| `ADD_PRIORITY_SCORE` | Modificar prioridad |
+
+---
+
+## Evaluación
+
+### Modo: First-Match (por defecto)
 
 ```text
-RULE PUTAWAY_FROZEN               ← Nombre descriptivo
-
-DOMAIN: Putaway                   ← A qué proceso aplica
-PRIORITY: 10                      ← Orden de evaluación (menor = primero)
-ACTIVE: true                      ← Si está activa
-VERSION: 3                        ← Versión actual
-
-IF
-  temperature_class = FROZEN      ← Condición 1
-  AND
-  HU_TYPE = PALLET                ← Condición 2
-
-THEN
-  zone = FREEZER                  ← Acción: asignar a zona congelados
-  storage_type = FLOOR            ← Acción: almacenamiento a piso
+Policies (ordenadas por prioridad):
+  1. IF TEMPERATURE=FROZEN AND HU=PALLET THEN INCLUDE_ZONE=FREEZER-A, SET_CONSOLIDATION=YES
+  2. IF HAZMAT!=NONE THEN INCLUDE_ZONE=HAZMAT, EXCLUDE_ZONE=MAIN
+  3. DEFAULT: INCLUDE_ZONE=MAIN
 ```
 
-### Evaluación de Reglas
+Se evalúa en orden. La primera que matchea se aplica. Si ninguna matchea, se usa el default.
 
-Las reglas se evalúan en orden de prioridad. La primera regla cuyas condiciones se cumplan, se ejecuta:
+### Modo: Score-Based
 
-```mermaid
-graph TB
-    START["Evento: Putaway requerido"] --> R1{"Rule 1: FROZEN + PALLET?"}
-    R1 -->|Sí| A1["→ FREEZER, FLOOR"]
-    R1 -->|No| R2{"Rule 2: HAZMAT?"}
-    R2 -->|Sí| A2["→ HAZMAT ZONE"]
-    R2 -->|No| R3{"Rule 3: HEAVY > 1000kg?"}
-    R3 -->|Sí| A3["→ ZONE A, FLOOR"]
-    R3 -->|No| R4{"Rule default"}
-    R4 --> A4["→ ZONE B, RACK"]
+```text
+Para cada candidato, sumar scores de todas las policies que aplican:
+  Zone match:        +100
+  Same SKU:          +50
+  Same Lot:          +30
+  Closest location:  +20
+  ABC preference:    +10
 ```
 
-### Propiedades de las Reglas
-
-Las reglas deben ser:
-
-| Propiedad | En inglés | Significado |
-|---|---|---|
-| **Versionadas** | Versioned | Cada cambio crea una nueva versión, las anteriores quedan como historial |
-| **Auditables** | Auditable | Se registra quién creó/modificó cada regla y cuándo |
-| **Testeables** | Testable | Se pueden ejecutar contra datos de prueba para verificar el comportamiento |
-| **Simulables** | Simulable | Se puede simular el impacto de una nueva versión antes de activarla |
-| **Publicables** | Publishable | Se activan explícitamente, no automáticamente al guardar |
-
-### Ciclo de Vida de una Versión de Reglas
-
-```mermaid
-stateDiagram-v2
-    [*] --> Draft: Crear nueva versión
-    Draft --> Testing: Enviar a pruebas
-    Testing --> Draft: Corregir
-    Testing --> Approved: Aprobar
-    Approved --> Active: Publicar
-    Active --> Deprecated: Nueva versión publicada
-    Deprecated --> [*]
-```
+El candidato con mayor score gana.
 
 ---
 
-## Relación con Odoo
+## Lo que NO hace el Policy Engine
 
-### Modelos Nuevos
+| Funcionalidad | ¿La hace? | Por qué |
+|---|---|---|
+| Ejecutar código arbitrario | ❌ | `safe_eval` prohibido |
+| Modificar campos de modelos | ❌ | Solo las acciones whitelisted |
+| Crear registros de otros modelos | ❌ | No es un workflow engine |
+| Evaluar expresiones Python | ❌ | DSL tipada, no código |
 
-Todos los modelos del Rule Engine son nuevos — Odoo no tiene un motor de reglas declarativas:
+---
+
+## Características Mantenidas de v1.0
+
+Las siguientes características de la v1.0 se mantienen:
+
+| Característica | Estado |
+|---|---|
+| Versionamiento de políticas | ✅ Mantenido |
+| Auditoría de cambios | ✅ Mantenido |
+| Simulación (dry-run) | ✅ Mantenido |
+| Activación/desactivación sin borrar | ✅ Mantenido |
+| Override por bodega | ✅ Mantenido |
+
+---
+
+## Modelos
 
 | Modelo | Propósito |
 |---|---|
-| `wms.rule` | Regla con condiciones y acciones |
-| `wms.rule_condition` | Condiciones (campo, operador, valor) |
-| `wms.rule_action` | Acciones (campo destino, valor) |
-| `wms.rule_set` | Conjunto de reglas para un dominio |
-| `wms.rule_version` | Versionamiento de conjuntos de reglas |
+| `wms.policy` | Política con tipo, condiciones y acciones |
+| `wms.policy.condition` | Condición tipada de una política |
+| `wms.policy.action` | Acción tipada de una política |
+| `wms.policy.type` | Catálogo de tipos de política por dominio |
 
 ---
 
-## Dependencias
-
-```mermaid
-graph LR
-    RULES["06 Rule Engine"] --> PUT["08 Putaway"]
-    RULES --> AL["10 Allocation"]
-    RULES --> WV["Wave Engine"]
-    RULES --> WE["04 Work Execution"]
-    RULES --> QU["Queue Engine"]
-    RULES --> PK["12 Picking"]
-    RULES --> QA["Quality"]
-    RULES --> RP["Replenishment"]
-```
-
-El Rule Engine **no tiene dependencias funcionales** con otros dominios WMS (es autocontenido), pero prácticamente todos los dominios **consumen** reglas.
-
----
-
-*Documento derivado de la sección 13 del [Plan Maestro](../plan.md).*
+*Documento corregido en v1.1. Cambio principal: de Rule Engine genérico a Typed Policy Engine (ADR-018).*

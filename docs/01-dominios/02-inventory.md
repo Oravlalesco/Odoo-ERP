@@ -1,6 +1,6 @@
-# Inventory Domain — Dominio de Inventario
+# Inventory Domain — Dominio de Inventario (v1.1)
 
-> El inventario es la fuente de verdad del WMS. Odoo `stock.quant` sigue siendo el registro maestro; el WMS agrega estados operacionales, contexto de HU y un ledger de eventos para trazabilidad completa.
+> El inventario es la fuente de verdad del WMS. Odoo `stock.quant` sigue siendo el registro maestro. Los estados operacionales WMS **no se agregan al quant** sino que se implementan mediante ubicaciones especializadas, políticas WMS y modelos independientes.
 
 ---
 
@@ -13,8 +13,8 @@ El inventario es el activo más protegido del sistema. Cada decisión que toma e
 ## Propósito
 
 1. Mantener una **fuente de verdad única** del inventario, basada en los modelos transaccionales de Odoo
-2. **Extender** esa información con estados operacionales WMS que Odoo no maneja
-3. Proveer un **Inventory Ledger** (libro de registro de inventario) que permita trazar la historia completa de cada unidad
+2. Implementar estados operacionales WMS **sin modificar la identidad lógica del quant**
+3. Proveer tres capas de registro distintas: **Operational Event Journal**, **Audit Log** e **Integration Outbox**
 
 ---
 
@@ -30,107 +30,168 @@ La fuente de verdad del inventario **continuará siendo Odoo**. No crearemos una
 | `stock.move.line` | Stock Move Line | Detalle del move: lote específico, paquete, cantidad real |
 | `stock.quant` | Stock Quant | **Inventario real**: cantidad de un producto en una ubicación específica, con lote y paquete. Es la foto actual del stock |
 
-### Extensiones WMS
+### Lo que Odoo 19 `stock.quant` YA posee
 
-El WMS agregará capas de información que Odoo no contempla:
+> [!IMPORTANT]
+> La documentación v1.0 proponía agregar campos que **ya existen** en Odoo 19. Esto se corrige aquí.
 
-| Extensión | En inglés | Significado | Ejemplo |
-|---|---|---|---|
-| **Estado de Inventario** | Inventory Status | Estado operacional del stock más allá de "disponible" | `AVAILABLE`, `QUALITY_HOLD`, `QUARANTINE`, `DAMAGED`, `RESERVED`, `IN_TRANSIT` |
-| **Propiedad del Inventario** | Inventory Ownership | A quién pertenece el inventario (permite operaciones 3PL) | `COMPANY-A`, `COMPANY-B` |
-| **Contexto de Reserva** | Reservation Context | Para qué se reservó el inventario | `WAVE-105`, `ORDER-4892` |
-| **Contexto de HU** | HU Context | En qué unidad de manejo está contenido | `PALLET-10092` |
-| **Estado de Calidad** | Quality Status | Resultado de inspección de calidad | `PASSED`, `PENDING`, `REJECTED` |
-| **Disponibilidad Operacional** | Operational Availability | Si está realmente disponible para operaciones WMS | Puede haber stock en sistema pero bloqueado por conteo |
-| **Eventos de Inventario** | Inventory Events | Registro de cada acción que afectó este inventario | Ver Inventory Ledger abajo |
-
-### Ejemplo de Registro Extendido
-
-```text
-SKU A
-Warehouse SCL01
-Location A03-R02-L04
-Lot L00231
-HU 780...                    ← SSCC del pallet
-Owner COMPANY-A              ← Propiedad (3PL)
-Status AVAILABLE             ← Estado operacional WMS
-Qty 120                      ← Cantidad
-```
-
-Un `stock.quant` de Odoo solo conoce: product, location, lot, package, quantity. Nuestro WMS agrega: owner, status, HU context, reservation context y quality status.
+| Campo | Ya existe | Detalle |
+|---|---|---|
+| `owner_id` | ✅ **Sí** | Propietario del inventario — soporta 3PL de fábrica |
+| `reserved_quantity` | ✅ **Sí** | Cantidad reservada por moves |
+| `available_quantity` | ✅ **Sí** | Computed: `quantity - reserved_quantity` |
+| `package_id` | ✅ **Sí** | Paquete / HU donde está el inventario |
+| `lot_id` | ✅ **Sí** | Lote o número de serie |
+| `warehouse_id` | ✅ **Sí** | Bodega |
+| `storage_category_id` | ✅ **Sí** | Categoría de almacenamiento |
+| `in_date` | ✅ **Sí** | Fecha de ingreso (usado por FIFO/FEFO) |
 
 ---
 
-## Inventory Ledger — Libro de Registro de Inventario
+## ⚠️ ADVERTENCIA P0: No modificar la identidad lógica del quant
 
-### ¿Qué es?
+### El Problema
 
-El **Inventory Ledger** (Libro de Registro de Inventario) es un modelo de eventos inmutables que registra cada acción que afecta al inventario. No pretende reemplazar `stock.move` de Odoo, sino proveer una capa de trazabilidad operacional adicional.
+Odoo consolida quants mediante `_merge_quants()` agrupando por:
 
-### Modelo Propuesto
+```sql
+GROUP BY product_id, company_id, location_id, lot_id, package_id, owner_id
+```
+
+Si agregáramos `inventory_status` o `quality_status` directamente como campos del quant **sin** modificar toda la lógica interna de gathering, merging, reservations y movimientos:
 
 ```text
-wms.inventory.event
+Quant A: product=SKU-1, location=A03, status=AVAILABLE,   qty=100
+Quant B: product=SKU-1, location=A03, status=QUARANTINE,  qty=100
 ```
+
+Odoo los consideraría el **mismo quant lógico** y podría fusionarlos en uno solo con `qty=200`. Esto corrompería el inventario de forma silenciosa y catastrófica.
+
+### La Solución: Estados WMS sin tocar el quant
+
+> **ADR-011**: No ampliar la identidad lógica de `stock.quant` sin análisis de impacto completo.
+>
+> **ADR-012**: Inventory Status no vive inicialmente en `stock.quant`.
+
+En lugar de agregar dimensiones al quant, implementamos estados operacionales así:
+
+| Estado WMS | Implementación | Cómo funciona |
+|---|---|---|
+| **Quality Hold** | Mover a ubicación tipo `QUALITY_HOLD` | Odoo ya mueve inventario entre locations — usamos una location especial |
+| **Quarantine** | Mover a ubicación tipo `QUARANTINE` | Location especial de cuarentena |
+| **Damaged** | Mover a ubicación tipo `DAMAGE` | Location especial de daños |
+| **Available** | Inventario en ubicación de almacenamiento normal | El estado por defecto |
+| **Reserved** | `stock.quant.reserved_quantity` | **Ya lo maneja Odoo** |
+| **Ownership** | `stock.quant.owner_id` | **Ya lo maneja Odoo** |
+| **HU Context** | `stock.quant.package_id` | **Ya lo maneja Odoo** |
+| **Operational Block** | `wms.inventory.block` (modelo nuevo) | Bloqueo temporal por conteo, investigación, etc. |
+| **Reservation Context** | `wms.allocation` (modelo nuevo) | Para qué wave/orden se reservó — NO en el quant |
+
+Este enfoque **usa la mecánica de Odoo** (mover inventario a ubicaciones especializadas) en vez de luchar contra ella.
+
+### Ejemplo: Quality Hold
+
+```text
+ANTES (status implícito por ubicación):
+  stock.quant: SKU-A, Location=A03-R02-L04, Qty=120
+  → Disponible (está en ubicación de almacenamiento)
+
+Quality hold trigger:
+  stock.move: A03-R02-L04 → WH/QUALITY-HOLD
+
+DESPUÉS:
+  stock.quant: SKU-A, Location=WH/QUALITY-HOLD, Qty=120
+  → Bloqueado por calidad (está en ubicación de hold)
+  → No asignable para picking (allocation ignora QUALITY-HOLD locations)
+
+Quality release:
+  stock.move: WH/QUALITY-HOLD → A03-R02-L04
+  → De vuelta a disponible
+```
+
+### Bloqueo Operacional (`wms.inventory.block`)
+
+Para bloqueos que no implican movimiento físico (ej: inventario bloqueado durante conteo):
+
+| Campo | Significado |
+|---|---|
+| `quant_id` | Quant bloqueado |
+| `block_type` | Tipo: `CYCLE_COUNT`, `INVESTIGATION`, `HOLD`, `CUSTOMS` |
+| `reason` | Motivo del bloqueo |
+| `blocked_by` | Usuario que bloqueó |
+| `blocked_at` | Timestamp |
+| `released_at` | Timestamp de liberación (null = activo) |
+
+El Allocation Engine **consulta** `wms.inventory.block` antes de asignar inventario.
+
+---
+
+## Tres Capas de Registro (v1.1)
+
+> [!IMPORTANT]
+> La v1.0 mezclaba tres conceptos distintos bajo "Inventory Ledger". La v1.1 los separa explícitamente porque tienen requisitos transaccionales diferentes.
+
+### 1. Operational Event Journal (`wms.inventory.event`)
+
+**Propósito**: Trazabilidad operacional de cada acción sobre inventario.
+
+**Requisito transaccional**: Se persiste **atómicamente** dentro de la misma transacción que modifica el inventario:
+
+```text
+BEGIN
+  stock.move.line → confirmar pick
+  stock.quant → reducir cantidad
+  wms.inventory.event → registrar evento PICK     ← misma transacción
+  wms.outbox → encolar notificación               ← misma transacción
+COMMIT
+```
+
+> **ADR-019**: Operational Event + Outbox se persisten atómicamente con la transacción de stock.
+
+Si `stock.quant` cambia pero `wms.inventory.event` no se crea, el journal deja de ser reconstruible.
 
 ### Ejemplo de Timeline
 
 ```text
-12:04  RECEIVE       Supplier → RECEIVING         Recepción de proveedor
-12:07  MOVE          RECEIVING → QUALITY           Movimiento a control de calidad
-12:18  RELEASE       QUALITY → AVAILABLE           Liberación tras pasar QC
-12:22  PUTAWAY       QUALITY → A03                 Almacenamiento en ubicación
-16:42  PICK          A03 → CART-12                  Recolección a carro de picking
-16:50  PACK          CART-12 → BOX-993             Empaque en caja
-17:03  STAGE         BOX-993 → DOCK-04             Movimiento a staging
-17:20  LOAD          DOCK-04 → TRUCK-21            Carga en camión
+12:04  RECEIVE       Supplier → RECEIVING
+12:07  MOVE          RECEIVING → QUALITY-HOLD
+12:18  RELEASE       QUALITY-HOLD → A03
+12:22  PUTAWAY       A03 → A03-R02-L04
+16:42  PICK          A03-R02-L04 → CART-12
+16:50  PACK          CART-12 → BOX-993
+17:03  STAGE         BOX-993 → DOCK-04
+17:20  LOAD          DOCK-04 → TRUCK-21
 ```
-
-### Tipos de Evento
-
-| Evento | En inglés | Significado |
-|---|---|---|
-| **Recibir** | RECEIVE | Mercadería ingresa al almacén desde origen externo |
-| **Mover** | MOVE | Traslado entre ubicaciones internas |
-| **Liberar** | RELEASE | Cambio de estado: bloqueado → disponible |
-| **Almacenar** | PUTAWAY | Ubicación en posición de almacenamiento |
-| **Recolectar** | PICK | Extracción de mercadería de una ubicación |
-| **Empacar** | PACK | Mercadería colocada dentro de un empaque |
-| **Preparar** | STAGE | Movimiento a área de staging pre-carga |
-| **Cargar** | LOAD | Colocación en transporte |
-| **Ajustar** | ADJUST | Corrección de cantidad por conteo o discrepancia |
-| **Bloquear** | HOLD | Inventario retenido por calidad u otra razón |
-| **Transferir** | TRANSFER | Movimiento entre bodegas |
-
-### Propósitos del Ledger
-
-| Propósito | Descripción |
-|---|---|
-| **Auditoría** | ¿Quién movió qué, cuándo y por qué? |
-| **Troubleshooting** | ¿Dónde estuvo este pallet a las 14:00? |
-| **Integración** | Alimentar eventos a sistemas externos (ERP, BI) |
-| **Analytics** | Tiempos de permanencia, velocidad de rotación, cuellos de botella |
-| **Reconstrucción operativa** | En caso de fallo, reconstruir el estado del inventario a un punto en el tiempo |
 
 ### Estructura del Evento
 
-Cada evento contendrá:
-
 | Campo | Significado |
 |---|---|
-| `timestamp` | Momento exacto de la acción |
+| `timestamp` | Momento exacto con resolución de milisegundos |
 | `event_type` | Tipo de evento (RECEIVE, PICK, etc.) |
 | `product_id` | Producto afectado |
 | `lot_id` | Lote o serial |
-| `hu_id` | Unidad de manejo (Handling Unit) |
+| `hu_id` | Unidad de manejo |
 | `source_location` | Ubicación de origen |
 | `dest_location` | Ubicación de destino |
 | `quantity` | Cantidad |
 | `operator_id` | Operador que ejecutó la acción |
-| `device_id` | Dispositivo RF utilizado |
+| `device_id` | Dispositivo RF |
 | `work_id` | Trabajo asociado |
-| `correlation_id` | ID de correlación para agrupar eventos relacionados |
+| `correlation_id` | ID de correlación |
 | `warehouse_id` | Bodega |
+
+### 2. Audit Log (`wms.audit.log`)
+
+**Propósito**: Registro inmutable de quién hizo qué, cuándo, desde dónde. Orientado a cumplimiento y seguridad.
+
+Detalle en [Auditoría](../03-plataforma/05-auditoria.md).
+
+### 3. Integration Outbox (`wms.outbox`)
+
+**Propósito**: Eventos que deben notificarse a sistemas externos (ERP, TMS, BI). Se persiste atómicamente con la acción, se consume asincrónicamente por integration workers.
+
+Detalle en [Integración](../03-plataforma/01-integracion.md).
 
 ---
 
@@ -140,7 +201,7 @@ Cada evento contendrá:
 
 | Modelo | Qué reutilizamos |
 |---|---|
-| `stock.quant` | Inventario real — fuente de verdad |
+| `stock.quant` | Inventario real — fuente de verdad (sin modificar identidad) |
 | `stock.move` | Movimientos transaccionales de inventario |
 | `stock.move.line` | Detalle de movimientos (lote, paquete, qty) |
 | `stock.lot` | Lotes y números de serie |
@@ -149,14 +210,17 @@ Cada evento contendrá:
 
 | Modelo | Extensión |
 |---|---|
-| `stock.quant` | Campos: `inventory_status`, `owner_id`, `quality_status`, `operational_availability` |
+| `stock.location` | Nuevos tipos de ubicación: `QUALITY_HOLD`, `QUARANTINE`, `DAMAGE` |
+| `stock.lot` | Campo `quality_status` a nivel de lote (no de quant) |
 
 ### Modelos Nuevos
 
 | Modelo | Propósito |
 |---|---|
-| `wms.inventory.event` | Ledger de eventos de inventario |
-| `wms.inventory.status` | Catálogo de estados operacionales |
+| `wms.inventory.event` | Journal operacional de eventos de inventario |
+| `wms.inventory.block` | Bloqueos operacionales sin movimiento físico |
+| `wms.audit.log` | Log de auditoría inmutable |
+| `wms.outbox` | Outbox de integración (transaccional) |
 
 ---
 
@@ -168,7 +232,7 @@ El inventario es el dominio más expuesto a problemas de concurrencia. Múltiple
 - Confirmar picks que reducen la misma cantidad
 - Ajustar inventario mientras se ejecuta un conteo
 
-Las operaciones críticas sobre inventario usarán **locking explícito** en PostgreSQL (`SELECT ... FOR UPDATE`) para garantizar consistencia. Ver documento de [Concurrencia](../03-plataforma/06-disponibilidad.md) para más detalle.
+Las operaciones críticas sobre inventario usarán **locking explícito** en PostgreSQL (`SELECT ... FOR UPDATE`) para garantizar consistencia. Ver [Transaction Architecture](../03-plataforma/00-transaction-architecture.md) y [Disponibilidad](../03-plataforma/06-disponibilidad.md).
 
 ---
 
@@ -188,8 +252,9 @@ graph LR
 
 ## Referencias
 
-- Odoo 19 — Stock module: warehouses, moves, quants, lots, packages, storage categories, replenishment y trazabilidad (Community LGPL)
+- Odoo 19 — Stock module (Community LGPL)
+- [Capability Matrix](00-odoo19-capability-matrix.md) — campos existentes en `stock.quant`
 
 ---
 
-*Documento derivado de las secciones 5-6 del [Plan Maestro](../plan.md).*
+*Documento corregido en v1.1. Cambios principales: eliminada propuesta de agregar `inventory_status`/`quality_status`/`owner_id` al quant (ADR-011/012), separados Event Journal / Audit Log / Outbox (ADR-019), documentados campos que ya existen en Odoo 19.*

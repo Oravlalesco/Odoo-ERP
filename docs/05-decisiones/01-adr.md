@@ -94,6 +94,132 @@ Un **ADR (Architecture Decision Record)** — Registro de Decisión Arquitectón
 
 ---
 
+## ADR v1.1 — Decisiones de la Revisión Arquitectónica
+
+### ADR-011: No ampliar la identidad lógica de `stock.quant` sin análisis de impacto
+
+**Contexto**: Odoo consolida quants con `_merge_quants()` agrupando por `(product, company, location, lot, package, owner)`. Agregar campos a esta identidad sin modificar toda la lógica interna causa fusión incorrecta de quants con estados diferentes.
+
+**Decisión**: No se agregarán campos como `inventory_status` o `quality_status` directamente a `stock.quant` sin un análisis completo de impacto en `_merge_quants()`, gathering, reservations y moves.
+
+**Consecuencia**: Los estados operacionales se implementan mediante ubicaciones especializadas o modelos WMS independientes.
+
+---
+
+### ADR-012: Inventory Status no vive inicialmente en `stock.quant`
+
+**Decisión**: Quality Hold, Quarantine y Damage se implementan moviendo inventario a ubicaciones especializadas (`QUALITY_HOLD`, `QUARANTINE`, `DAMAGE`). Bloqueos operacionales usan `wms.inventory.block`.
+
+**Consecuencia**: Se usa la mecánica de Odoo (mover a locations) en vez de luchar contra ella.
+
+---
+
+### ADR-013: `stock.quant.package` es la base de Handling Units
+
+**Contexto**: En Odoo 19 el modelo es `stock.quant.package` (clase `QuantPackage`), no `stock.package`. Ya posee jerarquía, dimensiones, peso y tipos de paquete.
+
+**Decisión**: No crearemos un modelo `wms.handling.unit` separado. La HU ES `stock.quant.package` extendido con campos WMS.
+
+**Consecuencia**: Se reduce significativamente el esfuerzo de la Fase HU.
+
+---
+
+### ADR-014: Allocation no es una segunda reserva de inventario
+
+**Decisión**: `wms.allocation` coordina con `stock.quant.reserved_quantity` de Odoo, no crea un sistema de reserva paralelo.
+
+**Consecuencia**: Evita double-booking de inventario.
+
+---
+
+### ADR-015: Work assignment usa lease + atomic claim
+
+**Contexto**: No podemos mantener una transacción PostgreSQL abierta mientras un operador trabaja (5-10 minutos).
+
+**Decisión**: La asignación de Work es un COMMIT atómico corto (<50ms). La protección de la asignación se mantiene mediante lease temporal con heartbeat.
+
+**Consecuencia**: Si un operador se desconecta, el lease expira y el Work se convierte en RECLAIMABLE.
+
+---
+
+### ADR-016: Work transactions are short-lived
+
+**Decisión**: Cada transacción que modifica `wms.work` dura menos de 200ms. No se mantienen transacciones abiertas durante la ejecución del operador.
+
+**Consecuencia**: Cada acción RF (scan, confirm, put) es una transacción independiente.
+
+---
+
+### ADR-017: RF offline solo ejecuta Work previamente asignado
+
+**Contexto**: "Offline-capable" es complejo para un WMS. Permitir obtener nuevo Work offline crearía conflictos de asignación irresolubles.
+
+**Decisión**: Offline solo permite continuar la ejecución de Work ya asignado. El operador no puede obtener nuevo Work sin conexión.
+
+**Consecuencia**: Requiere un local command journal con replay idempotente al reconectar.
+
+---
+
+### ADR-018: Rule Engine usa DSL tipada sin `safe_eval`
+
+**Contexto**: Un motor de reglas genérico con `safe_eval` es un riesgo de seguridad y difícil de validar/simular.
+
+**Decisión**: Las reglas usan un Typed Policy Engine con actions explícitamente whitelisted por dominio. Nunca `set arbitrary field X = Y`.
+
+**Consecuencia**: Las reglas son deterministas, tipadas, validables y simulables.
+
+---
+
+### ADR-019: Operational Event + Outbox se persisten atómicamente
+
+**Decisión**: `wms.inventory.event` y `wms.outbox` se crean dentro de la misma transacción que modifica `stock.quant`. Si el quant cambia pero el evento no se crea, es un bug.
+
+**Consecuencia**: El Event Journal es reconstruible. El Outbox garantiza at-least-once delivery.
+
+---
+
+### ADR-020: Addons de producción se empaquetan en imagen inmutable
+
+**Decisión**: En producción, los addons están dentro de la imagen Docker (no montados desde PVC). Cada pod ejecuta exactamente el mismo código.
+
+**Consecuencia**: Requiere CI/CD que construya la imagen, ejecute tests y publique a registry.
+
+---
+
+### ADR-021: Filestore debe soportar réplicas multi-node
+
+**Decisión**: En producción con múltiples pods, el filestore usa almacenamiento RWX (CephFS/NFS) o se externaliza a object storage.
+
+**Consecuencia**: No se puede usar `ReadWriteOnce` PVC para filestore en arquitectura multi-pod.
+
+---
+
+### ADR-022: Database schema migrations son release-gated
+
+**Contexto**: Todos los workloads usan la misma base de datos. Un `odoo -u wms_work` modifica el schema que RF está usando.
+
+**Decisión**: Las migraciones de schema son backward-compatible y se ejecutan como parte del release protocol, no ad-hoc.
+
+**Consecuencia**: Requiere Database Migration / Release Protocol con compatibility checks, maintenance mode y rollback rules.
+
+---
+
+### ADR-023: Security, Observability y Performance son cross-cutting concerns
+
+**Decisión**: No se dejan para fases tardías. Cada motor WMS desde su primera versión emite métricas, respeta RBAC y tiene performance budget.
+
+**Consecuencia**: Se definen BASELINE (desde Fase 3) y HARDENING (pre-producción).
+
+---
+
+### ADR-024: Product Logistics Profile es parte del WMS Kernel
+
+**Decisión**: El perfil logístico del producto (`wms.product.logistics`) se desarrolla en el Programa B (Kernel) porque Putaway, Allocation, Replenishment y Slotting lo necesitan.
+
+**Consecuencia**: Se agrega como Fase del Kernel, antes de Inbound.
+
+---
+
 ## Cómo agregar nuevos ADR
 
 Cada nuevo ADR debe seguir este formato:
@@ -110,4 +236,4 @@ Cada nuevo ADR debe seguir este formato:
 
 ---
 
-*Documento derivado de la sección 47 del [Plan Maestro](../plan.md).*
+*Documento derivado de la sección 47 del [Plan Maestro](../plan.md). Actualizado en v1.1 con ADR-011 a ADR-024.*
