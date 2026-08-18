@@ -7,7 +7,7 @@
 | Document Version | 1.2 |
 | Product Version | 0.1 (pre-development) |
 | Odoo Baseline | 19.0 @ `95f76213d3f732f1d198c740a908e8037c376114` |
-| Status | ARCHITECTURE REVIEW |
+| Status | ARCHITECTURE BASELINE APPROVED |
 | Implementation | NOT STARTED |
 
 ## Índice
@@ -23,50 +23,50 @@
 
 ### 🧩 Dominios
 
-| # | Documento | Contenido | v1.1 |
+| # | Documento | Contenido | Status |
 |---|---|---|---|
-| **00** | [**Odoo 19 Capability Matrix**](01-dominios/00-odoo19-capability-matrix.md) | **Qué reutilizar, extender y crear** | 🆕 |
-| **00** | [**Product Logistics Master**](01-dominios/00-product-logistics-master.md) | **Perfil logístico del producto** | 🆕 |
-| 01 | [Warehouse Master](01-dominios/01-warehouse-master.md) | Topología, zonas, racks, docks, capacidades |  |
-| 02 | [Inventory](01-dominios/02-inventory.md) | Stock, ledger, estados WMS, tres capas de registro | ✏️ |
-| 03 | [Handling Units](01-dominios/03-handling-units.md) | HU sobre `stock.package`, SSCC, operaciones | ✏️ |
-| 04 | [Work Execution](01-dominios/04-work-execution.md) | Work Engine + Queue Engine + **Lease Protocol** | ✏️ |
-| 05 | [Resources](01-dominios/05-resources.md) | Operadores, equipos, colas, assignment |  |
-| 06 | [Rule Engine](01-dominios/06-rule-engine.md) | **Typed Policy Engine** (sin safe_eval) | ✏️ |
-| 07 | [Inbound](01-dominios/07-inbound.md) | Recepción, dock, calidad |  |
-| 08 | [Putaway](01-dominios/08-putaway.md) | Almacenamiento dirigido, cross dock |  |
-| 09 | [Internal Logistics](01-dominios/09-internal-logistics.md) | Replenishment, slotting |  |
-| 10 | [Outbound](01-dominios/10-outbound.md) | Allocation, waves, picking, consolidation |  |
-| 11 | [Packing & Shipping](01-dominios/11-packing-shipping.md) | Empaque, staging, loading, despacho |  |
-| 12 | [Reverse Logistics](01-dominios/12-reverse-logistics.md) | Devoluciones |  |
-| 13 | [Inventory Control](01-dominios/13-inventory-control.md) | Conteo cíclico |  |
-| 14 | [Labor Management](01-dominios/14-labor-management.md) | Productividad |  |
+| **00** | [**Odoo 19 Capability Matrix**](01-dominios/00-odoo19-capability-matrix.md) | **Qué reutilizar, extender y crear** | v1.2 |
+| **00** | [**Product Logistics Master**](01-dominios/00-product-logistics-master.md) | **Perfil logístico del producto** | v1.2 |
+| 01 | [Warehouse Master](01-dominios/01-warehouse-master.md) | Topología, zonas, racks, `wms_location_role` | v1.2 |
+| 02 | [Inventory](01-dominios/02-inventory.md) | Stock, ledger, estados WMS, tres capas de registro | v1.2 |
+| 03 | [Handling Units](01-dominios/03-handling-units.md) | HU sobre `stock.package`, SSCC, operaciones | v1.2 |
+| 04 | [Work Execution](01-dominios/04-work-execution.md) | Work Engine + Lease + ACCEPT Protocol | v1.2 |
+| 05 | [Resources](01-dominios/05-resources.md) | Operadores, equipos, colas, assignment | v1.0 |
+| 06 | [Rule Engine](01-dominios/06-rule-engine.md) | **Typed Policy Engine** (sin safe_eval) | v1.1 |
+| 07 | [Inbound](01-dominios/07-inbound.md) | Recepción, dock, calidad | v1.0 |
+| 08 | [Putaway](01-dominios/08-putaway.md) | Almacenamiento dirigido, cross dock | v1.0 |
+| 09 | [Internal Logistics](01-dominios/09-internal-logistics.md) | Replenishment, slotting | v1.0 |
+| 10 | [Outbound](01-dominios/10-outbound.md) | Allocation, waves, picking, consolidation | v1.0 |
+| 11 | [Packing & Shipping](01-dominios/11-packing-shipping.md) | Empaque, staging, loading, despacho | v1.0 |
+| 12 | [Reverse Logistics](01-dominios/12-reverse-logistics.md) | Devoluciones | v1.0 |
+| 13 | [Inventory Control](01-dominios/13-inventory-control.md) | Conteo cíclico | v1.0 |
+| 14 | [Labor Management](01-dominios/14-labor-management.md) | Productividad | v1.0 |
 
 ---
 
 ### ⚙️ Operaciones
 
-| # | Documento | Contenido | v1.1 |
+| # | Documento | Contenido | Status |
 |---|---|---|---|
-| 01 | [RF / Mobile](02-operaciones/01-rf-mobile.md) | RF propio + **Offline Protocol** | ✏️ |
-| 02 | [Exception Engine](02-operaciones/02-exception-engine.md) | 13 tipos de excepción |  |
-| 03 | [Control Tower](02-operaciones/03-control-tower.md) | Dashboard operacional |  |
+| 01 | [RF / Mobile](02-operaciones/01-rf-mobile.md) | RF propio + Offline + **ACCEPT Protocol** | v1.2 |
+| 02 | [Exception Engine](02-operaciones/02-exception-engine.md) | 13 tipos de excepción | v1.0 |
+| 03 | [Control Tower](02-operaciones/03-control-tower.md) | Dashboard operacional | v1.0 |
 
 ---
 
 ### 🏗️ Plataforma
 
-| # | Documento | Contenido | v1.1 |
+| # | Documento | Contenido | Status |
 |---|---|---|---|
-| **00** | [**Transaction Architecture**](03-plataforma/00-transaction-architecture.md) | **Invariantes, boundaries, locking, idempotencia** | 🆕 |
-| 01 | [Integración](03-plataforma/01-integracion.md) | API, inbox/outbox, sync vs async |  |
-| 02 | [Kubernetes](03-plataforma/02-kubernetes.md) | K8s, HPA, PDB, runtime separation |  |
-| 03 | [Observability](03-plataforma/03-observability.md) | Métricas técnicas y de negocio |  |
-| 04 | [Seguridad](03-plataforma/04-seguridad.md) | RBAC, roles, scopes |  |
-| 05 | [Auditoría](03-plataforma/05-auditoria.md) | Trazabilidad completa |  |
-| 06 | [Disponibilidad](03-plataforma/06-disponibilidad.md) | Idempotencia, concurrencia, HA |  |
-| **07** | [**DEV vs PROD**](03-plataforma/07-plataforma-dev-vs-prod.md) | **Diferencias infraestructura dev/prod** | 🆕 |
-| **08** | [**NFR Workload Model**](03-plataforma/08-nfr-workload-model.md) | **Volúmenes, SLOs, dimensionamiento** | 🆕 |
+| **00** | [**Transaction Architecture**](03-plataforma/00-transaction-architecture.md) | **Invariantes, boundaries, locking, idempotencia** | v1.2 |
+| 01 | [Integración](03-plataforma/01-integracion.md) | API, inbox/outbox, sync vs async | v1.0 |
+| 02 | [Kubernetes](03-plataforma/02-kubernetes.md) | K8s, HPA, PDB, runtime separation | v1.0 |
+| 03 | [Observability](03-plataforma/03-observability.md) | Métricas técnicas y de negocio | v1.0 |
+| 04 | [Seguridad](03-plataforma/04-seguridad.md) | RBAC, roles, scopes | v1.0 |
+| 05 | [Auditoría](03-plataforma/05-auditoria.md) | Trazabilidad completa | v1.0 |
+| 06 | [Disponibilidad](03-plataforma/06-disponibilidad.md) | Idempotencia, concurrencia, HA | v1.0 |
+| **07** | [**DEV vs PROD**](03-plataforma/07-plataforma-dev-vs-prod.md) | **Diferencias infraestructura dev/prod** | v1.1 |
+| **08** | [**NFR Workload Model**](03-plataforma/08-nfr-workload-model.md) | **Volúmenes, SLOs, dimensionamiento** | v1.2 |
 
 ---
 
@@ -82,16 +82,16 @@
 | 06 | [Programa F](04-roadmap/06-programa-f.md) | Fases 34-43: Plataforma |
 | 07 | [Programa G](04-roadmap/07-programa-g.md) | Fases 44-50: AI/ML |
 
-> **v1.1**: Integration Foundation, Security Baseline, Observability Baseline y Product Logistics Master se mueven al Kernel (ADR-023/024).
+> Integration Foundation, Security Baseline, Observability Baseline y Product Logistics Master pertenecen al Kernel (ADR-023/024).
 
 ---
 
 ### 📋 Decisiones
 
-| # | Documento | Contenido | v1.1 |
+| # | Documento | Contenido | Status |
 |---|---|---|---|
-| 01 | [ADR](05-decisiones/01-adr.md) | **27 ADRs** (10 original + 14 v1.1 + 3 v1.2) | ✏️ |
-| 02 | [Ficha de Fase](05-decisiones/02-ficha-fase-template.md) | Template + 8 secciones nuevas | ✏️ |
+| 01 | [ADR](05-decisiones/01-adr.md) | **27 ADRs** (10 original + 14 v1.1 + 3 v1.2) | v1.2 |
+| 02 | [Ficha de Fase](05-decisiones/02-ficha-fase-template.md) | Template + 8 secciones nuevas | v1.1 |
 
 ---
 

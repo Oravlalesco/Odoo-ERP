@@ -1,6 +1,8 @@
-# Warehouse Master — Maestro de Bodega
+# Warehouse Master — Maestro de Bodega (v1.2)
 
 > Representación digital de la bodega física: la base sobre la que todos los algoritmos WMS toman decisiones.
+>
+> **v1.2**: Incorpora `wms_location_role` (ADR-026) para semántica WMS sin modificar `stock.location.usage`. Distingue `storage_type` de `wms_location_role`.
 
 ---
 
@@ -136,7 +138,59 @@ No crearemos modelos paralelos. **Extenderemos** los existentes con campos adici
 | Modelo | Extensión WMS |
 |---|---|
 | `stock.warehouse` | Campos para building, configuración WMS, timezone, horarios |
-| `stock.location` | Storage type, zone, capacidades (peso, volumen, HU), temperatura, hazardous, secuencias, perfiles |
+| `stock.location` | `wms_location_role`, storage type, zone, capacidades (peso, volumen, HU), temperatura, hazardous, secuencias, perfiles |
+
+### `wms_location_role` — Semántica WMS (ADR-026)
+
+> **Regla**: `stock.location.usage` conserva la semántica Odoo (`internal`, `supplier`, `customer`, etc.). NO se crean valores nuevos de `usage`. La semántica operacional WMS vive en `wms_location_role`.
+
+```text
+stock.location.usage     → semántica Odoo (no modificar)
+wms_location_role        → semántica operacional WMS
+storage_type             → infraestructura física
+```
+
+#### Catálogo de `wms_location_role`
+
+| Role | Significado | usage Odoo |
+|---|---|---|
+| `STORAGE` | Almacenamiento de reserva (bulk) | `internal` |
+| `RESERVE_STORAGE` | Almacenamiento de respaldo | `internal` |
+| `PICK_FACE` | Ubicación de picking activo | `internal` |
+| `RECEIVING` | Área de recepción | `internal` |
+| `QUALITY_HOLD` | Retención por calidad | `internal` |
+| `QUARANTINE` | Cuarentena regulatoria | `internal` |
+| `DAMAGE` | Mercancía dañada | `internal` |
+| `STAGING` | Área de preparación pre-despacho | `internal` |
+| `CONSOLIDATION` | Consolidación de pedidos | `internal` |
+| `PACKING` | Estación de empaque | `internal` |
+| `CROSS_DOCK` | Cross-docking directo | `internal` |
+| `DOCK` | Muelle de carga/descarga | `internal` |
+
+#### `wms_location_role` vs `storage_type`
+
+Responden preguntas distintas:
+
+| Pregunta | Campo | Ejemplo |
+|---|---|---|
+| ¿Qué función operacional cumple? | `wms_location_role` | `PICK_FACE` |
+| ¿Qué infraestructura física tiene? | `storage_type` | `PALLET_RACK` |
+
+Una ubicación puede ser:
+
+```text
+wms_location_role = PICK_FACE
+storage_type = PALLET_RACK
+→ Pick face servido por rack de pallets
+
+wms_location_role = STORAGE
+storage_type = SHELF
+→ Almacenamiento de reserva en estantería
+
+wms_location_role = QUALITY_HOLD
+storage_type = FLOOR
+→ Área de calidad en piso
+```
 
 ### Modelos Nuevos Propuestos
 
@@ -184,4 +238,4 @@ Un WMS que solo conoce "Ubicación A03" no puede decidir si un pallet de 1,500 k
 
 ---
 
-*Documento derivado de la sección 4 del [Plan Maestro](../plan.md).*
+*Documento derivado de la sección 4 del [Plan Maestro](../archive/plan-v1.0.md). v1.2: `wms_location_role` (ADR-026).*

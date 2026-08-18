@@ -1,8 +1,8 @@
-# RF / WMS Mobile — Cliente Móvil para Operadores (v1.1)
+# RF / WMS Mobile — Cliente Móvil para Operadores (v1.2)
 
 > Interface propia de radiofrecuencia diseñada para operación dirigida en piso. Pantallas extremadamente simples, comunicación vía HTTPS y conexión directa al Work Engine.
 >
-> **v1.1**: Detalla RF Offline Protocol, agrega command journal, corrige "offline-capable" de bullet point a especificación técnica (ADR-017).
+> **v1.2**: Incorpora ACCEPT Protocol (operador no puede iniciar movimiento físico sin ACK de IN_PROGRESS). Offline protocol alineado con ADR-025 (RECONCILIATION_REQUIRED para IN_PROGRESS).
 
 ---
 
@@ -93,9 +93,28 @@ NEXT WORK?
 
 ---
 
-## Ejemplo de Flujo RF: Picking
+### Pantalla 0: ACCEPT (v1.2)
 
-### Pantalla 1: Trabajo asignado
+> **Invariante**: El operador no puede iniciar movimiento físico hasta recibir ACK de transición a IN_PROGRESS.
+
+```text
+NEW WORK ASSIGNED
+
+PICK
+ORDER: 4521
+WAVE: W-105
+LOCATION: A03-R02-L01
+
+[F1] ACCEPT    [F4] REJECT
+```
+
+Al presionar ACCEPT:
+1. RF envía `ACCEPT` al server
+2. Server: `ASSIGNED → IN_PROGRESS` (atomic commit + lease renewal)
+3. Server envía ACK al RF
+4. RF habilita ejecución física y modo offline
+
+### Pantalla 1: Trabajo en progreso
 
 ```text
 PICK
@@ -137,13 +156,18 @@ ACTUAL:
 
 ---
 
-## RF Offline Protocol (v1.1)
+## RF Offline Protocol (v1.2)
 
 > **ADR-017**: RF offline solo ejecuta Work previamente asignado.
+> **ADR-025**: IN_PROGRESS con lease expirado → RECONCILIATION_REQUIRED (no auto-requeue).
+
+### Prerequisito: ACCEPT Protocol
+
+El modo offline solo se habilita **después de que el operador recibe ACK de IN_PROGRESS**. Antes de eso, el Work está en ASSIGNED y una pérdida de conectividad simplemente expira el lease → RECLAIMABLE → READY (sin riesgo físico).
 
 ### ¿Qué significa "offline"?
 
-No significa que el operador pueda trabajar indefinidamente sin conexión. Significa que ante una **interrupción temporal de conectividad** (Wi-Fi inestable, zona muerta del almacén), el operador puede continuar ciertos pasos del Work que ya tiene asignado.
+No significa que el operador pueda trabajar indefinidamente sin conexión. Significa que ante una **interrupción temporal de conectividad** (Wi-Fi inestable, zona muerta del almacén), el operador puede continuar ciertos pasos del Work que ya está en IN_PROGRESS.
 
 ### Lo que SÍ se permite offline
 
@@ -203,25 +227,39 @@ Server recibe: CONFIRM_PICK(command_id=uuid-123, work_id=10592, ...)
    → No: ejecutar normalmente
 ```
 
-### Conflicto: Work fue reasignado
+### Conflicto: Work en RECONCILIATION_REQUIRED (v1.2)
+
+> ⚠️ **Corrección ADR-025**: Un Work en IN_PROGRESS con lease expirado va a RECONCILIATION_REQUIRED, NO a READY.
 
 ```text
 Operador A pierde Wi-Fi, sigue trabajando offline
-Server: lease expira → Work RECLAIMABLE → READY
-Operador B toma el Work → assignment_version=2
 
-Operador A reconecta, intenta replay:
-  work_version en journal = 1
-  work_version actual = 2
-  → CONFLICT: Work fue reasignado
-  → Descartar journal, notificar operador
+Server:
+  Work está en IN_PROGRESS (tiene líneas ejecutadas)
+  lease expira
+  Work → RECONCILIATION_REQUIRED (¡NO auto-requeue!)
+  Supervisor notificado vía Control Tower
+
+Caso A — Operador A reconecta (típico):
+  RF envía replay del command journal
+  Server verifica assignment_version
+  Si assignment_version coincide → replay OK
+  Work vuelve a IN_PROGRESS normalmente
+
+Caso B — Operador A no reconecta:
+  Supervisor investiga físicamente
+  Confirma estado real del inventario
+  Reasigna o genera Work compensatorio
 ```
+
+> **Nunca**: `IN_PROGRESS → READY → Operador B toma el mismo pick`. Eso causa doble movimiento físico.
 
 ### Límites del Modo Offline
 
 | Límite | Valor | Razón |
 |---|---|---|
-| **Duración máxima** | 10 minutos (configurable) | Después, el lease expira y el Work puede ser reasignado |
+| **Activación** | Solo después de ACCEPT ACK | Antes de eso, Work en ASSIGNED → auto-requeue seguro |
+| **Duración máxima** | 10 minutos (configurable) | Después, el lease expira → RECONCILIATION_REQUIRED |
 | **Comandos máximos** | 50 | Prevenir journals enormes |
 | **Tipos permitidos** | Solo ejecución | No planning ni allocation |
 
@@ -233,4 +271,4 @@ Dynamics 365 y SAP EWM tienen interfaces mobile/RF explícitamente centradas en 
 
 ---
 
-*Documento derivado de la sección 34 del [Plan Maestro](../plan.md). Corregido en v1.1: RF Offline Protocol (ADR-017), command journal, replay idempotente.*
+*Documento derivado de la sección 34 del [Plan Maestro](../archive/plan-v1.0.md). v1.1: RF Offline Protocol (ADR-017). v1.2: ACCEPT Protocol, ADR-025 alignment, RECONCILIATION_REQUIRED.*
