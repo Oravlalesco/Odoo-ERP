@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: odoo
+spec:
+  storageClassName: gp3 # O el StorageClass de tu proveedor cloud (ej. standard, managed-premium, etc.)
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: odoo-web-data-pvc
+  namespace: odoo
+spec:
+  storageClassName: gp3
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: odoo-extra-addons-pvc
+  namespace: odoo
+spec:
+  storageClassName: gp3

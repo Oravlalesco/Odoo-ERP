@@ -1,0 +1,62 @@
+
+services:
+  # ==============================================================================
+  # Base de Datos PostgreSQL para Odoo
+  # ==============================================================================
+  db:
+    image: postgres:16
+    container_name: odoo_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      POSTGRES_USER: ${POSTGRES_USER:-odoo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-odoo_secure_password_2026}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - odoo-db-data:/var/lib/postgresql/data/pgdata
+    networks:
+      - odoo-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-odoo} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==============================================================================
+  # Aplicación Odoo (ERP-WMS-TMS)
+  # ==============================================================================
+  odoo:
+    build:
+      context: ./docker/odoo
+      dockerfile: Dockerfile
+    container_name: odoo_app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      HOST: db
+      PORT: 5432
+      USER: ${POSTGRES_USER:-odoo}
+      PASSWORD: ${POSTGRES_PASSWORD:-odoo_secure_password_2026}
+      ODOO_ADMIN_PASSWORD: ${ODOO_ADMIN_PASSWORD:-admin_super_secret_master_key}
+    ports:
+      - "${ODOO_HTTP_PORT:-8069}:8069"
+      - "${ODOO_LONGPOLLING_PORT:-8072}:8072"
+    volumes:
+      - odoo-web-data:/var/lib/odoo
+      - ./custom_addons:/mnt/extra-addons
+      - ./docker/odoo/odoo.conf:/etc/odoo/odoo.conf:ro
+    networks:
+      - odoo-network
+
+volumes:
+  odoo-db-data:
+    name: odoo_db_data
+  odoo-web-data:
+    name: odoo_web_data
+
+networks:
+  odoo-network:
+    name: odoo_network
+    driver: bridge

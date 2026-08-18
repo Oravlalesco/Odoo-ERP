@@ -1,0 +1,25 @@
+# Entorno local y secretos
+.env
+*.env.local
+secrets.yaml
+
+# Python / Odoo
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.log
+
+# IDEs y Editores
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docker / Kubernetes temporales
+*.tar
+kubeconfig
+*.backup
+*.dump

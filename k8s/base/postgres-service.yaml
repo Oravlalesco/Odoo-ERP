@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: odoo
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: erp-wms-tms
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      name: postgres
+  selector:
+    app.kubernetes.io/name: postgres
