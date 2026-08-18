@@ -168,20 +168,23 @@ Solo el request que logra el `INSERT` adquiere ownership del procesamiento. El `
 | Componente | Idempotency Key |
 |---|---|
 | API de integración | Header `X-Idempotency-Key` (UUID del caller) |
-| RF commands | `{device_id}:{work_id}:{command_sequence}` |
+| RF commands | `command_id` (UUID generado por el dispositivo RF) |
 | Outbox processing | `{event_id}` |
 | Inbox processing | `{message_id}` |
 
+> **Nota v1.2**: Para RF, `command_id` es la identidad de idempotencia. `device_id`, `work_id`, `assignment_version` y `sequence` se usan para ordering y concurrency guard, no como idempotency key.
+
 ---
 
-## Failure Recovery
+## Failure Recovery (v1.2)
 
 ### Escenarios y Comportamiento
 
 | Escenario | Estado del Work | Inventario | Recuperación |
 |---|---|---|---|
-| **RF crash durante pick** | IN_PROGRESS | No modificado (pick no confirmado) | Lease expira → RECLAIMABLE |
-| **RF crash durante confirm** | Depende de timing | Si COMMIT pasó → modificado. Si no → intacto | Idempotency key protege de duplicado |
+| **RF crash, Work en ASSIGNED** | ASSIGNED | Intacto (operador no ejecutó) | Lease expira → RECLAIMABLE → READY |
+| **RF crash, Work en IN_PROGRESS** | IN_PROGRESS | Puede haber movimiento físico parcial | Lease expira → **RECONCILIATION_REQUIRED** (ADR-025) |
+| **RF crash durante confirm** | Depende de timing | Si COMMIT pasó → modificado. Si no → intacto | Idempotency key (`command_id`) protege de duplicado |
 | **Worker crash durante wave** | Wave parcial | Solo se crearon works de transacciones commiteadas | Worker retoma works faltantes |
 | **DB crash** | Última transacción commiteada | Consistente por ACID | WAL recovery estándar de PostgreSQL |
 | **Pod restart** | Works ASSIGNED quedan ASSIGNED | Intacto | Lease expira → RECLAIMABLE |

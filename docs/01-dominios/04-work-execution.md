@@ -1,8 +1,8 @@
-# Work Execution — Motor de Trabajo y Motor de Colas (v1.1)
+# Work Execution — Motor de Trabajo y Motor de Colas (v1.2)
 
 > El componente más importante de toda la plataforma. Transforma necesidades logísticas en unidades de trabajo ejecutables y las distribuye a través de colas a los recursos disponibles.
 >
-> **v1.1**: Agrega Work Lease Protocol, corrige modelo de crash recovery, agrega estados CLAIMED y RECLAIMABLE (ADR-015/016).
+> **v1.2**: Máquina de estados consolidada. `CLAIMED` simplificado a transitorio. `RECLAIMABLE` solo para ASSIGNED sin ejecución. `IN_PROGRESS` con lease expirado → `RECONCILIATION_REQUIRED` (ADR-025). ACCEPT protocol invariant.
 
 ---
 
@@ -95,25 +95,24 @@ Cuando un operador solicita trabajo, no mantenemos una transacción PostgreSQL a
 | `assignment_version` | Assignment Version | Versión incremental — evita race conditions en reasignación |
 | `reclaim_count` | Reclaim Count | Cuántas veces se ha reclamado este work (detect problematic work) |
 
-### Máquina de Estados del Work (v1.1)
+### Máquina de Estados del Work (v1.2)
 
 ```mermaid
 stateDiagram-v2
     [*] --> Draft: Creado
     Draft --> Ready: Validado y listo
-    Ready --> Claimed: Atomic claim
-    Claimed --> Assigned: Operador confirmado
-    Assigned --> InProgress: Operador acepta
+    Ready --> Assigned: Atomic claim
+    Assigned --> InProgress: Operador ACCEPT + ACK
     InProgress --> InProgress: Línea completada
     InProgress --> Completed: Todas las líneas completadas
     InProgress --> Exception: Error o problema
     Exception --> InProgress: Resuelto
     Exception --> Cancelled: No resoluble
     Ready --> Cancelled: Cancelado
-    Assigned --> Reclaimable: Lease expirado
-    InProgress --> Reclaimable: Heartbeat perdido
+    Assigned --> Reclaimable: Lease expirado (sin ejecución)
     Reclaimable --> Ready: Auto-requeue
-    Reclaimable --> Assigned: Supervisor reasigna
+    InProgress --> ReconciliationRequired: Lease expirado (con ejecución)
+    ReconciliationRequired --> Assigned: Supervisor / operador original
     Completed --> [*]
     Cancelled --> [*]
 ```
@@ -122,13 +121,42 @@ stateDiagram-v2
 |---|---|---|
 | **Borrador** | Draft | Creado pero no validado |
 | **Listo** | Ready | Validado, esperando asignación |
-| **Reclamado** | Claimed | Claim atómico ejecutado (transacción corta) — transitorio |
-| **Asignado** | Assigned | Asignado a un recurso confirmado |
-| **En Progreso** | In Progress | El operador está ejecutando las líneas |
+| **Asignado** | Assigned | Claim atómico ejecutado. Operador ve instrucciones pero aún no ejecutó |
+| **En Progreso** | In Progress | El operador ACCEPTÓ y recibió ACK — puede ejecutar movimiento físico |
 | **Completado** | Completed | Todas las líneas ejecutadas exitosamente |
 | **Excepción** | Exception | Un problema detuvo la ejecución |
-| **Reclamable** | Reclaimable | Lease expirado — disponible para reasignación |
+| **Reclamable** | Reclaimable | Lease expirado en ASSIGNED sin ejecución — auto-requeue seguro |
+| **Reconciliación** | Reconciliation Required | Lease expirado en IN_PROGRESS — requiere supervisor (ADR-025) |
 | **Cancelado** | Cancelled | Trabajo cancelado |
+
+> **Nota v1.2**: `CLAIMED` ya no existe como estado persistente. El claim atómico (<50ms) transiciona directamente de `READY` a `ASSIGNED` en una sola transacción.
+
+### ⚠️ Invariante de Ejecución: ACCEPT Protocol
+
+> **Un operador no puede comenzar movimiento físico hasta haber recibido ACK de transición a IN_PROGRESS.**
+
+```text
+NEXT WORK
+     ↓
+ASSIGNED
+     ↓
+RF presenta trabajo al operador
+     ↓
+Operador: ACCEPT (escanea primer item o presiona F1)
+     ↓
+Server: commits IN_PROGRESS + renueva lease
+     ↓
+ACK al RF
+     ↓
+Recién ahora el operador puede ejecutar movimiento físico
+```
+
+Sin el ACK, existe una ventana donde el operador toma mercancía físicamente, pierde Wi-Fi, y el server auto-requeue el Work (porque sigue en ASSIGNED). Con ACCEPT:
+
+| Estado | Offline + lease expiry | Riesgo físico |
+|---|---|---|
+| ASSIGNED (pre-ACCEPT) | → RECLAIMABLE → READY | ✅ Ninguno — operador aún no tocó mercancía |
+| IN_PROGRESS (post-ACCEPT) | → RECONCILIATION_REQUIRED | ✅ Protegido — requiere supervisor |
 
 ### Generación de Work
 

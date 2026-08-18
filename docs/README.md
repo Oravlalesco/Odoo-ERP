@@ -1,10 +1,14 @@
-# WMS Industrial — Documentación Técnica v1.1
+# WMS Industrial — Architecture Blueprint v1.2
 
-> Blueprint completo del sistema WMS industrial construido sobre Odoo 19 Community.
->
-> **v1.1**: Correcciones arquitectónicas tras revisión contra código fuente Odoo 19, adición de matriz de capacidades, Product Logistics Master, Transaction Architecture, Work Lease Protocol, NFR/SLOs y 14 nuevos ADR.
+> Architecture Baseline Candidate del sistema WMS industrial construido sobre Odoo 19 Community.
 
----
+| Propiedad | Valor |
+|---|---|
+| Document Version | 1.2 |
+| Product Version | 0.1 (pre-development) |
+| Odoo Baseline | 19.0 @ `95f76213d3f732f1d198c740a908e8037c376114` |
+| Status | ARCHITECTURE REVIEW |
+| Implementation | NOT STARTED |
 
 ## Índice
 
@@ -25,7 +29,7 @@
 | **00** | [**Product Logistics Master**](01-dominios/00-product-logistics-master.md) | **Perfil logístico del producto** | 🆕 |
 | 01 | [Warehouse Master](01-dominios/01-warehouse-master.md) | Topología, zonas, racks, docks, capacidades |  |
 | 02 | [Inventory](01-dominios/02-inventory.md) | Stock, ledger, estados WMS, tres capas de registro | ✏️ |
-| 03 | [Handling Units](01-dominios/03-handling-units.md) | HU sobre `stock.quant.package`, SSCC, operaciones | ✏️ |
+| 03 | [Handling Units](01-dominios/03-handling-units.md) | HU sobre `stock.package`, SSCC, operaciones | ✏️ |
 | 04 | [Work Execution](01-dominios/04-work-execution.md) | Work Engine + Queue Engine + **Lease Protocol** | ✏️ |
 | 05 | [Resources](01-dominios/05-resources.md) | Operadores, equipos, colas, assignment |  |
 | 06 | [Rule Engine](01-dominios/06-rule-engine.md) | **Typed Policy Engine** (sin safe_eval) | ✏️ |
@@ -91,11 +95,12 @@
 
 ---
 
-### 📖 Plan Maestro
+### 📎 Archive
 
 | Documento | Contenido |
 |---|---|
-| [Plan Maestro](plan.md) | Documento original de 2,272 líneas — fuente de toda la documentación |
+| [plan.md](plan.md) | ⚠️ **SUPERSEDED** — redirige a este README |
+| [plan-v1.0.md](archive/plan-v1.0.md) | Documento original de 2,272 líneas (histórico) |
 
 ---
 

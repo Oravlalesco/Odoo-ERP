@@ -1,8 +1,20 @@
-# Odoo 19 Community — Capability Matrix
+# Odoo 19 Community — Capability Matrix (v1.2)
 
-> Análisis detallado de lo que Odoo 19 Community ya posee, qué extenderemos y qué crearemos nuevo. Este documento debe existir **antes del modelo ER** porque cambia decisiones de diseño en múltiples dominios.
+> Análisis detallado de lo que Odoo 19 Community ya posee, qué extenderemos y qué crearemos nuevo.
 
----
+### Odoo Baseline (ADR-027)
+
+| Propiedad | Valor |
+|---|---|
+| `odoo_version` | 19.0 |
+| `upstream_repository` | odoo/odoo |
+| `upstream_commit` | `95f76213d3f732f1d198c740a908e8037c376114` |
+| `verified_at` | 2026-08-18 |
+| `docker_image` | odoo:19.0 |
+| `docker_digest` | TODO — fijar antes de primer desarrollo |
+| `capability_matrix_version` | 1.2 |
+
+> Cada actualización de upstream commit requiere re-verificación de esta matriz + regression testing.
 
 ## Contexto
 
@@ -127,7 +139,7 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | `shipping_weight` | ✅ Reutilizar | **Ya existe** — peso de envío |
 | `pack_date` | ✅ Reutilizar | **Ya existe** — fecha de empaque |
 | `quant_ids` | ✅ Reutilizar | **Ya existe** — contenido (relación a quants) |
-| `valid_sscc` | ❓ Verificar | Puede no existir en Community estándar — posiblemente módulo GS1/Enterprise |
+| `valid_sscc` | ✅ Reutilizar | **Ya existe** — campo computed `_compute_valid_sscc()` con encoder SSCC |
 | HU lifecycle (state machine) | 🆕 Crear WMS | Estado del ciclo de vida WMS |
 | `seal_number` | 🆕 Crear WMS | Número de sello |
 | `hu_operational_class` | 🆕 Crear WMS | Clasificación operacional |
@@ -138,12 +150,12 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 
 | Campo / Funcionalidad | Estado | Detalle |
 |---|---|---|
-| `height`, `width`, `length` | ✅ Reutilizar | **Ya existen** — dimensiones |
+| `height`, `width`, `packaging_length` | ✅ Reutilizar | **Ya existen** — dimensiones (nota: el campo es `packaging_length`, no `length`) |
 | `base_weight` | ✅ Reutilizar | **Ya existe** — peso tara |
 | `max_weight` | ✅ Reutilizar | **Ya existe** — peso máximo |
 | `barcode` | ✅ Reutilizar | **Ya existe** — código de barras |
 | Storage capacities | ✅ Reutilizar | **Ya existe** — capacidades de almacenamiento |
-| `reusable` / `disposable` | ✅ Reutilizar | **Ya existe** |
+| `package_use` | ✅ Reutilizar | **Ya existe** — Selection: `disposable` / `reusable` |
 
 **Conclusión**: No necesitamos reconstruir jerarquía, dimensiones ni tipo de paquete. Solo agregar semántica WMS.
 
@@ -215,7 +227,7 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | WMS Logistics Profile | 🆕 Crear WMS | Ver [Product Logistics Master](00-product-logistics-master.md) |
 | ABC class, velocity class | 🆕 Crear WMS | Clasificación de rotación |
 | Temperature class, hazmat class | 🆕 Crear WMS | Clases operacionales |
-| Pick UOM, case UOM, pallet UOM | 🔧 Extender | Vía `product.packaging` + perfil WMS |
+| Pick packaging, case packaging, pallet packaging | 🔧 Extender | Vía `product.packaging` + `wms.product.logistics` (`pick_packaging_id`, `case_packaging_id`, `pallet_packaging_id`) |
 | Units per case, cases per layer, layers per pallet | 🆕 Crear WMS | Configuración logística |
 | Storage/putaway/replenishment/allocation profiles | 🆕 Crear WMS | Perfiles WMS |
 

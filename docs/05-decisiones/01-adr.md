@@ -138,7 +138,7 @@ Un **ADR (Architecture Decision Record)** — Registro de Decisión Arquitectón
 
 **Decisión**: La asignación de Work es un COMMIT atómico corto (<50ms). La protección de la asignación se mantiene mediante lease temporal con heartbeat.
 
-**Consecuencia**: Si un operador se desconecta, el lease expira y el Work se convierte en RECLAIMABLE.
+**Consecuencia**: Si un operador se desconecta y el lease expira: Work en ASSIGNED (sin ejecución) → RECLAIMABLE → READY. Work en IN_PROGRESS (con ejecución) → RECONCILIATION_REQUIRED (ver ADR-025).
 
 ---
 
@@ -174,7 +174,7 @@ Un **ADR (Architecture Decision Record)** — Registro de Decisión Arquitectón
 
 **Decisión**: `wms.inventory.event` y `wms.outbox` se crean dentro de la misma transacción que modifica `stock.quant`. Si el quant cambia pero el evento no se crea, es un bug.
 
-**Consecuencia**: El Event Journal es reconstruible. El Outbox garantiza at-least-once delivery.
+**Consecuencia**: El Event Journal es transaccional y completo para operaciones WMS. La reconstructibilidad global del inventario queda fuera de garantía hasta cubrir todas las fuentes de mutación (backoffice, imports, manufacturing). El Outbox garantiza at-least-once delivery.
 
 ---
 

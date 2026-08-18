@@ -28,7 +28,7 @@ No podemos diseñar infraestructura con esa ambigüedad. Este documento la resue
 | Variable | Valor |
 |---|---|
 | RF devices registrados | 500 |
-| RF activos simultáneamente | 250 (típico), 400 (peak) |
+| RF activos simultáneamente | 250 (design peak), 400 (stress) |
 | Intervalo entre acciones RF | 3-5 segundos por operador |
 | Bodegas | 2-3 |
 | SKUs activos | 10,000-50,000 |
@@ -39,11 +39,11 @@ No podemos diseñar infraestructura con esa ambigüedad. Este documento la resue
 | Escenario | RF activos | Picks/min | Confirmations/s | Integration msg/s | Orders/hr | Inventory events/day |
 |---|---|---|---|---|---|---|
 | **NORMAL** | 150 | 100 | 30 | 10 | 5,000 | 500K |
-| **PEAK** | 250 | 300 | 80 | 20 | 20,000 | 2M |
+| **DESIGN PEAK** | 250 | 300 | 80 | 20 | 20,000 | 2M |
 | **STRESS** | 400 | 500 | 130 | 40 | 35,000 | 3.5M |
 | **EXTREME** | 500 | 800 | 200 | 60 | 50,000 | 5M |
 
-### Desglose de PEAK (escenario de diseño)
+### Desglose de DESIGN PEAK (escenario de diseño)
 
 ```text
 250 operadores activos:
@@ -59,14 +59,19 @@ No podemos diseñar infraestructura con esa ambigüedad. Este documento la resue
 
 250 → Heartbeats  (cada 30s)                   = ~8 TPS
 
-Total RF TPS: ~54 TPS
+Sustained RF TPS: ~54 TPS
 
-+ Integration: 20 msg/s
-+ Backoffice: 5 req/s
-+ Wave planning: burst 50 work creates/s
++ Integration: 20 msg/s (sustained)
++ Backoffice: 5 req/s (sustained)
 
-Total system TPS peak: ~130 TPS
+Total sustained TPS: ~79 TPS
+
++ Wave planning: burst 50 work creates/s (transient, 5-30s)
+
+Total burst TPS (worst case): ~130 TPS
 ```
+
+> **Nota v1.2**: 130 TPS es burst transitorio durante wave releases, no carga sostenida. La carga sostenida de design peak es ~79 TPS.
 
 ---
 
