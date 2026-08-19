@@ -26,18 +26,30 @@ class StockLocationWms(models.Model):
     """Extensión de ubicación con campos WMS."""
     _inherit = 'stock.location'
 
+    # Catálogo aprobado: 12 roles operacionales WMS.
+    # wms_location_role es OPCIONAL (default=False).
+    # False = ubicación no clasificada por el WMS.
+    #
+    # INVARIANTE (ADR-026):
+    #   Si wms_location_role tiene valor, usage DEBE ser 'internal'.
+    #   Nunca modificar ni agregar valores a stock.location.usage.
     wms_location_role = fields.Selection([
-        ('STORAGE', 'Almacenamiento'),
-        ('PICK_FACE', 'Cara de picking'),
-        ('RECEIVING', 'Recepción'),
+        ('STORAGE', 'Storage'),
+        ('RESERVE_STORAGE', 'Reserve Storage'),
+        ('PICK_FACE', 'Pick Face'),
+        ('RECEIVING', 'Receiving'),
+        ('QUALITY_HOLD', 'Quality Hold'),
+        ('QUARANTINE', 'Quarantine'),
+        ('DAMAGE', 'Damage'),
         ('STAGING', 'Staging'),
-        ('SHIPPING', 'Envío'),
-        ('QUALITY_HOLD', 'Retención de calidad'),
-        ('QUARANTINE', 'Cuarentena'),
-        ('DAMAGE', 'Daño'),
-        ('DOCK', 'Muelle'),
-    ], string='Rol WMS', default='STORAGE',
-       help='Rol operacional de la ubicación en el WMS')
+        ('CONSOLIDATION', 'Consolidation'),
+        ('PACKING', 'Packing'),
+        ('CROSS_DOCK', 'Cross-Dock'),
+        ('DOCK', 'Dock'),
+    ], string='WMS Location Role', default=False,
+       help='Operational function of this location within the WMS. '
+            'Does not replace stock.location.usage. '
+            'Only valid on locations with usage=internal.')
     pick_sequence = fields.Integer(
         string='Secuencia de picking',
         help='Orden de recorrido para picking optimizado')
