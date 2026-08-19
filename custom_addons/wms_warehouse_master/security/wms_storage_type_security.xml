@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        WM-011: Record rule multi-company para wms.storage.type.
+        Aislamiento por compañías permitidas del usuario.
+        Usa company_ids (plural) para soportar usuarios
+        con múltiples compañías habilitadas.
+    -->
+
+    <record id="wms_storage_type_company_rule" model="ir.rule">
+        <field name="name">WMS Storage Type: multi-company isolation</field>
+        <field name="model_id" ref="model_wms_storage_type"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
+</odoo>

@@ -5,3 +5,6 @@ access_wms_zone_system,wms.zone system admin,model_wms_zone,base.group_system,1,
 access_wms_activity_area_operator,wms.activity.area operator,model_wms_activity_area,wms_core.group_wms_operator,1,0,0,0
 access_wms_activity_area_manager,wms.activity.area manager,model_wms_activity_area,wms_core.group_wms_manager,1,1,1,1
 access_wms_activity_area_system,wms.activity.area system admin,model_wms_activity_area,base.group_system,1,1,1,1
+access_wms_storage_type_operator,wms.storage.type operator,model_wms_storage_type,wms_core.group_wms_operator,1,0,0,0
+access_wms_storage_type_manager,wms.storage.type manager,model_wms_storage_type,wms_core.group_wms_manager,1,1,1,1
+access_wms_storage_type_system,wms.storage.type system admin,model_wms_storage_type,base.group_system,1,1,1,1

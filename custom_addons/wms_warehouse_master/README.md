@@ -223,11 +223,45 @@ La relación `stock.location ↔ wms.activity.area` no está implementada todav�
 
 ---
 
+### Storage Type (`wms.storage.type`)
+
+Catálogo de infraestructura física de almacenamiento.
+
+**Semántica:**
+```text
+stock.location.usage     → semántica estándar Odoo
+wms_location_role        → función operacional (PICK / STORAGE / ...)
+wms.storage.type         → infraestructura física (PALLET_RACK / SHELF / ...)
+```
+
+**Scope:**
+- Pertenece a una Company (`company_id` required, `ondelete='restrict'`)
+- Reutilizable entre warehouses de la misma Company
+- No lleva `warehouse_id` propio
+
+**Identidad operacional:**
+- `(company_id, code)` — UNIQUE constraint a nivel DB
+- Mismo código en companies diferentes: permitido
+- Código normalizado: `strip().upper()`
+- Código vacío: rechazado
+
+**Seguridad:**
+- Operator / Supervisor: sólo lectura
+- Manager / System Admin: CRUD completo
+- Multi-company: record rule global `[('company_id', 'in', company_ids)]`
+
+**Nota:** No existe un catálogo hardcoded de tipos (PALLET, SHELF, etc.).
+La relación `stock.location ↔ wms.storage.type` no está implementada todavía.
+No hay capacidades físicas (peso, volumen, temperatura) todavía.
+La UI administrativa no está disponible todavía.
+
+---
+
 ## Future Responsibilities
 
 As the WMS evolves, this module will contain:
 
-- Storage types and physical capacities
+- Physical capacities per storage type
 - Operational restrictions per location
 - Travel / pick sequencing attributes
 - Dock semantics
