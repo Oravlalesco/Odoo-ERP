@@ -2,15 +2,25 @@
 <odoo>
 
     <!--
-        WM-003: Herencia de stock.view_location_form.
-        Inserta wms_location_role en el grupo "Additional Information",
+        WM-003 / WM-007: Herencia de stock.view_location_form.
+        Inserta campos WMS en el grupo "Additional Information",
         después de usage.
 
-        Dos apariciones del campo para controlar edición:
+        wms_location_role (WM-003):
         - Editable: visible sólo para WMS Manager / System Admin
         - Sólo lectura: visible para el resto de usuarios internos
+        - Invisible cuando usage != 'internal'
 
-        Ambas invisibles cuando usage != 'internal'.
+        warehouse_id (WM-007 helper):
+        - Invisible siempre — sólo disponible para domain/invisible
+          evaluations client-side.
+
+        wms_zone_id (WM-007):
+        - Editable: visible sólo para WMS Manager / System Admin
+        - Sólo lectura: visible para el resto de usuarios internos
+        - Invisible cuando usage != 'internal' o sin warehouse o sin company
+        - Domain: mismo warehouse + misma company
+        - Quick create deshabilitado
     -->
 
     <record id="view_location_form_wms_role" model="ir.ui.view">
@@ -29,8 +39,27 @@
                        readonly="1"
                        groups="base.group_user,!wms_core.group_wms_manager,!base.group_system"
                        invisible="usage != 'internal'"/>
+
+                <!-- warehouse_id helper: disponible para domain/invisible
+                     evaluation client-side. No visible al usuario. -->
+                <field name="warehouse_id" invisible="1"/>
+
+                <!-- Editable: WMS Manager o System Admin -->
+                <field name="wms_zone_id"
+                       groups="wms_core.group_wms_manager,base.group_system"
+                       domain="[('warehouse_id', '=', warehouse_id), ('company_id', '=', company_id)]"
+                       options="{'no_create': True}"
+                       invisible="usage != 'internal' or not warehouse_id or not company_id"/>
+                <!-- Sólo lectura: usuarios internos sin permisos de edición WMS -->
+                <field name="wms_zone_id"
+                       readonly="1"
+                       groups="base.group_user,!wms_core.group_wms_manager,!base.group_system"
+                       domain="[('warehouse_id', '=', warehouse_id), ('company_id', '=', company_id)]"
+                       options="{'no_create': True}"
+                       invisible="usage != 'internal' or not warehouse_id or not company_id"/>
             </xpath>
         </field>
     </record>
 
 </odoo>
+

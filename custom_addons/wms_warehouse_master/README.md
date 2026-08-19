@@ -163,7 +163,14 @@ El navigation shell WMS dedicado queda diferido.
 - Misma política que `wms_location_role` (refactorizado en helper unificado)
 - Protección contra `default_wms_zone_id` en contexto
 
-**Nota:** La UI de asignación de zona todavía no está disponible.
+**Administración UI:**
+- Campo disponible en formulario nativo de `stock.location`
+- Sólo visible en locations internas con warehouse y company asignados
+- Domain filtra zonas del mismo warehouse + misma company
+- WMS Manager / System Admin: editable
+- Operator / Supervisor: sólo lectura
+- Quick-create de Zone deshabilitado (usar UI dedicada de WM-005)
+- La seguridad server-side sigue siendo autoritativa
 
 ---
 
