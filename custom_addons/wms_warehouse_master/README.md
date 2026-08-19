@@ -268,6 +268,15 @@ wms.storage.type         → infraestructura física (PALLET_RACK / SHELF / ...)
 - Archivar ST no rompe relaciones existentes
 - Seguridad de mutación: misma política unificada (Manager/System)
 
+**Administración UI de asignación:**
+- Campo disponible en formulario nativo de `stock.location`
+- Visible sólo en locations internas company-owned (no requiere warehouse)
+- Domain: misma compañía `[('company_id', '=', company_id)]`
+- Quick-create deshabilitado (usar UI dedicada de WM-012)
+- WMS Manager / System Admin: editable
+- Usuarios internos: sólo lectura
+- La seguridad server-side sigue siendo autoritativa
+
 **Nota:** No existe un catálogo hardcoded de tipos (PALLET, SHELF, etc.).
 No hay capacidades físicas (peso, volumen, temperatura) todavía.
 
