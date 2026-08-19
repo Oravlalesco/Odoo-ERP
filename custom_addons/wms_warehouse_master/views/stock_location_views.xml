@@ -2,7 +2,7 @@
 <odoo>
 
     <!--
-        WM-003 / WM-007: Herencia de stock.view_location_form.
+        WM-003 / WM-007 / WM-014: Herencia de stock.view_location_form.
         Inserta campos WMS en el grupo "Additional Information",
         después de usage.
 
@@ -20,6 +20,14 @@
         - Sólo lectura: visible para el resto de usuarios internos
         - Invisible cuando usage != 'internal' o sin warehouse o sin company
         - Domain: mismo warehouse + misma company
+        - Quick create deshabilitado
+
+        wms_storage_type_id (WM-014):
+        - Editable: visible sólo para WMS Manager / System Admin
+        - Sólo lectura: visible para el resto de usuarios internos
+        - Invisible cuando usage != 'internal' o sin company
+        - NO requiere warehouse (a diferencia de Zone)
+        - Domain: misma company
         - Quick create deshabilitado
     -->
 
@@ -57,9 +65,24 @@
                        domain="[('warehouse_id', '=', warehouse_id), ('company_id', '=', company_id)]"
                        options="{'no_create': True}"
                        invisible="usage != 'internal' or not warehouse_id or not company_id"/>
+
+                <!-- Editable: WMS Manager o System Admin -->
+                <field name="wms_storage_type_id"
+                       groups="wms_core.group_wms_manager,base.group_system"
+                       domain="[('company_id', '=', company_id)]"
+                       options="{'no_create': True}"
+                       invisible="usage != 'internal' or not company_id"/>
+                <!-- Sólo lectura: usuarios internos sin permisos de edición WMS -->
+                <field name="wms_storage_type_id"
+                       readonly="1"
+                       groups="base.group_user,!wms_core.group_wms_manager,!base.group_system"
+                       domain="[('company_id', '=', company_id)]"
+                       options="{'no_create': True}"
+                       invisible="usage != 'internal' or not company_id"/>
             </xpath>
         </field>
     </record>
 
 </odoo>
+
 
