@@ -250,10 +250,17 @@ wms.storage.type         → infraestructura física (PALLET_RACK / SHELF / ...)
 - Manager / System Admin: CRUD completo
 - Multi-company: record rule global `[('company_id', 'in', company_ids)]`
 
+**Administración:**
+- Menú: Inventory → Configuration → Warehouse Management → WMS Storage Types (sequence 52)
+- Vistas: List, Form, Search
+- `company_id` editable en formulario (ownership real, no derivado)
+- Default Company: `env.company`
+- Manager / System Admin administran; Operator / Supervisor no reciben menú
+- La seguridad server-side continúa autoritativa
+
 **Nota:** No existe un catálogo hardcoded de tipos (PALLET, SHELF, etc.).
 La relación `stock.location ↔ wms.storage.type` no está implementada todavía.
 No hay capacidades físicas (peso, volumen, temperatura) todavía.
-La UI administrativa no está disponible todavía.
 
 ---
 
