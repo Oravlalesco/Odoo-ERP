@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         WM-005: WMS Zone Administration UI
+         List, Form, Search, Action, Menu
+         ============================================================ -->
+
+    <!-- ==================== List View ==================== -->
+
+    <record id="view_wms_zone_list" model="ir.ui.view">
+        <field name="name">wms.zone.list</field>
+        <field name="model">wms.zone</field>
+        <field name="arch" type="xml">
+            <list string="WMS Zones">
+                <field name="sequence" widget="handle"/>
+                <field name="code"/>
+                <field name="name"/>
+                <field name="warehouse_id"/>
+                <field name="company_id" optional="hide"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ==================== Form View ==================== -->
+
+    <record id="view_wms_zone_form" model="ir.ui.view">
+        <field name="name">wms.zone.form</field>
+        <field name="model">wms.zone</field>
+        <field name="arch" type="xml">
+            <form string="WMS Zone">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="name" placeholder="Nombre de la zona"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="code"/>
+                            <field name="warehouse_id"/>
+                            <field name="company_id" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ==================== Search View ==================== -->
+
+    <record id="view_wms_zone_search" model="ir.ui.view">
+        <field name="name">wms.zone.search</field>
+        <field name="model">wms.zone</field>
+        <field name="arch" type="xml">
+            <search string="Buscar zonas WMS">
+                <field name="name"/>
+                <field name="code"/>
+                <field name="warehouse_id"/>
+                <field name="company_id"/>
+                <filter name="inactive"
+                        string="Archivadas"
+                        domain="[('active', '=', False)]"/>
+                <group>
+                    <filter name="group_warehouse"
+                            string="Bodega"
+                            context="{'group_by': 'warehouse_id'}"/>
+                    <filter name="group_company"
+                            string="Compañía"
+                            context="{'group_by': 'company_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ==================== Action ==================== -->
+
+    <record id="action_wms_zone" model="ir.actions.act_window">
+        <field name="name">WMS Zones</field>
+        <field name="res_model">wms.zone</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_wms_zone_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Crear una zona WMS
+            </p>
+            <p>
+                Las zonas agrupan lógicamente ubicaciones dentro de una
+                bodega para clasificación operacional y distribución de trabajo.
+            </p>
+        </field>
+    </record>
+
+    <!-- ==================== Menu ==================== -->
+
+    <menuitem id="menu_wms_zone"
+              name="WMS Zones"
+              parent="stock.menu_warehouse_config"
+              action="action_wms_zone"
+              groups="wms_core.group_wms_manager,base.group_system"
+              sequence="50"/>
+
+</odoo>

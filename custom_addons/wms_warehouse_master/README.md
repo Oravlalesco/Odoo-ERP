@@ -110,6 +110,33 @@ Aislamiento multi-company mediante record rule global.
 
 ---
 
+### Zone Administration UI
+
+Administración de `wms.zone` desde el backoffice de Odoo.
+
+**Ruta de navegación:**
+
+```text
+Inventory → Configuration → Warehouse Management → WMS Zones
+```
+
+**Vistas disponibles:**
+- List (con drag-and-drop para reordenar secuencia)
+- Form
+- Search (filtro archivadas, agrupar por bodega/compañía)
+
+**Acceso al menú:**
+- WMS Manager + Stock Manager nativo: menú visible
+- Operator WMS: sin menú administrativo
+- Supervisor WMS: sin menú administrativo
+- System Admin: acceso completo
+
+La seguridad sigue siendo server-side (ACL + record rule).
+Las ubicaciones todavía NO están asignadas a zonas.
+El navigation shell WMS dedicado queda diferido.
+
+---
+
 ## Future Responsibilities
 
 As the WMS evolves, this module will contain:
