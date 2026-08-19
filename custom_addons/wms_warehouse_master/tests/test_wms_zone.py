@@ -1,3 +1,5 @@
+from psycopg2 import IntegrityError
+
 from odoo.exceptions import AccessError, ValidationError
 from odoo.tests.common import TransactionCase
 
@@ -108,6 +110,15 @@ class TestWmsZone(TransactionCase):
                 self.Zone._fields,
                 f"Campo '{field_name}' no encontrado en wms.zone",
             )
+        # AC-004: company_id NO es ownership independiente
+        company_field = self.Zone._fields["company_id"]
+        self.assertEqual(
+            company_field.related,
+            "warehouse_id.company_id",
+            "company_id debe ser related a warehouse_id.company_id",
+        )
+        self.assertTrue(company_field.readonly, "company_id debe ser readonly")
+        self.assertTrue(company_field.store, "company_id debe ser store")
 
     # ------------------------------------------------------------------
     # Creación básica
@@ -171,12 +182,13 @@ class TestWmsZone(TransactionCase):
             "code": "FAST_PICK",
             "warehouse_id": self.warehouse_a.id,
         })
-        with self.assertRaises(Exception):
-            self.Zone.create({
-                "name": "Zone B",
-                "code": " fast_pick ",
-                "warehouse_id": self.warehouse_a.id,
-            })
+        with self.assertRaises(IntegrityError):
+            with self.env.cr.savepoint():
+                self.Zone.create({
+                    "name": "Zone B",
+                    "code": " fast_pick ",
+                    "warehouse_id": self.warehouse_a.id,
+                })
 
     def test_zone_07_same_code_different_warehouse_ok(self):
         """TEST-ZONE-007: mismo code en warehouses distintos es válido."""
@@ -199,13 +211,19 @@ class TestWmsZone(TransactionCase):
     # ------------------------------------------------------------------
 
     def test_zone_08_company_follows_warehouse(self):
-        """TEST-ZONE-008: company_id se deriva del warehouse."""
+        """TEST-ZONE-008: company_id se deriva del warehouse y transiciona."""
         zone = self.Zone.create({
             "name": "Zone Derive",
             "code": "DERIVE",
             "warehouse_id": self.warehouse_a.id,
         })
         self.assertEqual(zone.company_id, self.company_a)
+        # Cambiar warehouse → company transiciona automáticamente
+        zone.with_company(self.company_b).write({
+            "warehouse_id": self.warehouse_b.id,
+        })
+        self.assertEqual(zone.warehouse_id, self.warehouse_b)
+        self.assertEqual(zone.company_id, self.company_b)
 
     # ------------------------------------------------------------------
     # Seguridad RBAC
@@ -223,15 +241,24 @@ class TestWmsZone(TransactionCase):
 
     def test_zone_10_operator_cannot_mutate(self):
         """TEST-ZONE-010: Operator NO puede create/write/unlink."""
+        zone = self.Zone.create({
+            "name": "Operator Protected",
+            "code": "OP_PROTECTED",
+            "warehouse_id": self.warehouse_a.id,
+        })
         with self.assertRaises(AccessError):
             self.Zone.with_user(self.operator_user).create({
                 "name": "Bad Create",
                 "code": "BAD_OP",
                 "warehouse_id": self.warehouse_a.id,
             })
+        with self.assertRaises(AccessError):
+            zone.with_user(self.operator_user).write({"name": "Forbidden"})
+        with self.assertRaises(AccessError):
+            zone.with_user(self.operator_user).unlink()
 
     def test_zone_11_supervisor_read_only(self):
-        """TEST-ZONE-011: Supervisor puede leer pero NO mutar."""
+        """TEST-ZONE-011: Supervisor puede leer pero NO create/write/unlink."""
         zone = self.Zone.create({
             "name": "Sup Read",
             "code": "SUP_READ",
@@ -240,9 +267,19 @@ class TestWmsZone(TransactionCase):
         # Read OK
         zone_read = self.Zone.with_user(self.supervisor_user).browse(zone.id)
         self.assertEqual(zone_read.code, "SUP_READ")
+        # Create FAIL
+        with self.assertRaises(AccessError):
+            self.Zone.with_user(self.supervisor_user).create({
+                "name": "Bad Sup Create",
+                "code": "BAD_SUP",
+                "warehouse_id": self.warehouse_a.id,
+            })
         # Write FAIL
         with self.assertRaises(AccessError):
             zone_read.write({"name": "Modified"})
+        # Unlink FAIL
+        with self.assertRaises(AccessError):
+            zone_read.unlink()
 
     def test_zone_12_manager_crud(self):
         """TEST-ZONE-012: Manager puede create/read/write/unlink."""
@@ -285,10 +322,15 @@ class TestWmsZone(TransactionCase):
             "warehouse_id": self.warehouse_b.id,
         })
 
-        # Operator sólo Company A → NO ve Zone B
+        # Operator sólo Company A → NO ve Zone B en search
         zones_op = self.Zone.with_user(self.operator_user).search([])
         self.assertIn(zone_a, zones_op)
         self.assertNotIn(zone_b, zones_op)
+
+        # Acceso directo por ID también bloqueado
+        zone_b_as_operator = zone_b.with_user(self.operator_user)
+        with self.assertRaises(AccessError):
+            zone_b_as_operator.read(["name"])
 
         # Multi-company user (A+B) → ve ambas
         zones_multi = self.Zone.with_user(self.multi_company_user).search([])
