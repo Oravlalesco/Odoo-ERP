@@ -132,8 +132,38 @@ Inventory → Configuration → Warehouse Management → WMS Zones
 - System Admin: acceso completo
 
 La seguridad sigue siendo server-side (ACL + record rule).
-Las ubicaciones todavía NO están asignadas a zonas.
 El navigation shell WMS dedicado queda diferido.
+
+---
+
+### Location → Zone Relationship
+
+`stock.location.wms_zone_id` enlaza ubicaciones nativas con el maestro `wms.zone`.
+
+**Campo:**
+- `Many2one("wms.zone")`, opcional, `default=False`
+- `ondelete='restrict'`, `check_company=True`, `index=True`, `copy=True`
+
+**Invariantes (si `wms_zone_id != False`):**
+1. `usage == 'internal'`
+2. `warehouse_id != False`
+3. `zone.warehouse_id == location.warehouse_id`
+4. `company_id != False` (ubicaciones compartidas no pueden tener zona)
+5. `zone.company_id == location.company_id`
+
+**Lifecycle:**
+- Mover una location a otro warehouse con zone asignada → `ValidationError`
+- El usuario debe limpiar `wms_zone_id` antes de mover
+- Cambiar `Zone.warehouse_id` con locations asignadas → `ValidationError` (incluye archivadas)
+- Cambiar `Zone.warehouse_id` sin locations → permitido
+- Archivar una Zone no rompe relaciones existentes
+
+**Seguridad de mutación:**
+- Sólo WMS Manager o System Admin pueden asignar/desasignar zona
+- Misma política que `wms_location_role` (refactorizado en helper unificado)
+- Protección contra `default_wms_zone_id` en contexto
+
+**Nota:** La UI de asignación de zona todavía no está disponible.
 
 ---
 

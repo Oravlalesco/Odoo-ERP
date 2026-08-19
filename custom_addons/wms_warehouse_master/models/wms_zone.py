@@ -102,7 +102,32 @@ class WmsZone(models.Model):
         return super().create(vals_list)
 
     def write(self, vals):
-        """Normalizar código durante la escritura."""
+        """Normalizar código y proteger cambio de warehouse con locations."""
         if "code" in vals:
             vals["code"] = self._normalize_code(vals["code"])
+        if "warehouse_id" in vals:
+            self._check_warehouse_change_allowed(vals["warehouse_id"])
         return super().write(vals)
+
+    def _check_warehouse_change_allowed(self, new_warehouse_id):
+        """Bloquear cambio de warehouse si hay locations asignadas.
+
+        Incluye locations archivadas (active_test=False) para evitar
+        que un archive+change eluda la protección.
+        """
+        Location = self.env["stock.location"].with_context(active_test=False)
+        for zone in self:
+            if zone.warehouse_id.id == new_warehouse_id:
+                continue
+            assigned = Location.search_count([
+                ("wms_zone_id", "=", zone.id),
+            ], limit=1)
+            if assigned:
+                raise ValidationError(
+                    _(
+                        "No se puede cambiar el warehouse de la zona "
+                        "'%(zone)s' mientras tenga ubicaciones asignadas. "
+                        "Desasigne las ubicaciones primero."
+                    )
+                    % {"zone": zone.display_name}
+                )
