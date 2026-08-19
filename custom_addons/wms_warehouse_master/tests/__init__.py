@@ -6,5 +6,6 @@ from . import test_stock_location_zone_ui
 from . import test_wms_activity_area
 from . import test_wms_activity_area_ui
 from . import test_wms_storage_type
+from . import test_wms_storage_type_ui
 from . import test_wms_zone
 from . import test_wms_zone_ui

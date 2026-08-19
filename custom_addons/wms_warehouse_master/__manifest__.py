@@ -30,6 +30,7 @@ models.
         "views/stock_location_views.xml",
         "views/wms_zone_views.xml",
         "views/wms_activity_area_views.xml",
+        "views/wms_storage_type_views.xml",
     ],
     "installable": True,
     "application": False,
