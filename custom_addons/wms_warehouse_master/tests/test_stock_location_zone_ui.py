@@ -27,6 +27,16 @@ class TestStockLocationZoneUI(TransactionCase):
         """Retorna todos los elementos <field name='field_name'> en el arch."""
         return self.arch.xpath(f"//field[@name='{field_name}']")
 
+    @staticmethod
+    def _parse_groups(field):
+        """Extraer grupos como set normalizado."""
+        return {g.strip() for g in field.get("groups", "").split(",") if g.strip()}
+
+    @staticmethod
+    def _normalize_expr(value):
+        """Normalizar whitespace de una expresión XML."""
+        return " ".join(value.split())
+
     # ------------------------------------------------------------------
     # TEST-ZONE-UI-LOC-001: View metadata
     # ------------------------------------------------------------------
@@ -83,9 +93,11 @@ class TestStockLocationZoneUI(TransactionCase):
             len(editable), 1,
             "Debe haber exactamente 1 occurrence editable de wms_zone_id.",
         )
-        groups = editable[0].get("groups", "")
-        self.assertIn("wms_core.group_wms_manager", groups)
-        self.assertIn("base.group_system", groups)
+        groups = self._parse_groups(editable[0])
+        self.assertEqual(
+            groups,
+            {"wms_core.group_wms_manager", "base.group_system"},
+        )
 
     # ------------------------------------------------------------------
     # TEST-ZONE-UI-LOC-005: Readonly occurrence groups
@@ -100,48 +112,56 @@ class TestStockLocationZoneUI(TransactionCase):
             len(readonly), 1,
             "Debe haber exactamente 1 occurrence readonly de wms_zone_id.",
         )
-        groups = readonly[0].get("groups", "")
-        self.assertIn("base.group_user", groups)
-        self.assertIn("!wms_core.group_wms_manager", groups)
-        self.assertIn("!base.group_system", groups)
+        groups = self._parse_groups(readonly[0])
+        self.assertEqual(
+            groups,
+            {
+                "base.group_user",
+                "!wms_core.group_wms_manager",
+                "!base.group_system",
+            },
+        )
 
     # ------------------------------------------------------------------
     # TEST-ZONE-UI-LOC-006: Both occurrences visibility
     # ------------------------------------------------------------------
 
     def test_zone_ui_loc_06_both_invisible_expressions(self):
-        """TEST-ZONE-UI-LOC-006: ambas apariciones tienen invisible que
-        cubre usage, warehouse_id y company_id."""
+        """TEST-ZONE-UI-LOC-006: ambas apariciones tienen la expresión
+        invisible exacta aprobada."""
+        expected = (
+            "usage != 'internal' or "
+            "not warehouse_id or "
+            "not company_id"
+        )
         zone_fields = self._find_fields("wms_zone_id")
         for field in zone_fields:
-            inv = field.get("invisible", "")
-            # Normalize whitespace for comparison
-            inv_normalized = " ".join(inv.split())
-            self.assertIn("usage", inv_normalized,
-                          "invisible debe verificar usage")
-            self.assertIn("warehouse_id", inv_normalized,
-                          "invisible debe verificar warehouse_id")
-            self.assertIn("company_id", inv_normalized,
-                          "invisible debe verificar company_id")
+            self.assertEqual(
+                self._normalize_expr(field.get("invisible", "")),
+                expected,
+            )
 
     # ------------------------------------------------------------------
     # TEST-ZONE-UI-LOC-007: Both occurrences domain and options
     # ------------------------------------------------------------------
 
     def test_zone_ui_loc_07_domain_and_options(self):
-        """TEST-ZONE-UI-LOC-007: ambas apariciones tienen domain con
-        warehouse_id + company_id, y no_create=True."""
+        """TEST-ZONE-UI-LOC-007: ambas apariciones tienen domain y options
+        exactos."""
+        expected_domain = (
+            "[('warehouse_id', '=', warehouse_id), "
+            "('company_id', '=', company_id)]"
+        )
         zone_fields = self._find_fields("wms_zone_id")
         for field in zone_fields:
-            domain = field.get("domain", "")
-            domain_normalized = " ".join(domain.split())
-            self.assertIn("warehouse_id", domain_normalized,
-                          "domain debe filtrar por warehouse_id")
-            self.assertIn("company_id", domain_normalized,
-                          "domain debe filtrar por company_id")
-            options = field.get("options", "")
-            self.assertIn("no_create", options,
-                          "options debe incluir no_create")
+            self.assertEqual(
+                self._normalize_expr(field.get("domain", "")),
+                expected_domain,
+            )
+            self.assertEqual(
+                field.get("options"),
+                "{'no_create': True}",
+            )
 
     # ------------------------------------------------------------------
     # TEST-ZONE-UI-LOC-008: wms_location_role regression
@@ -154,21 +174,32 @@ class TestStockLocationZoneUI(TransactionCase):
             len(role_fields), 2,
             "wms_location_role debe tener exactamente 2 apariciones.",
         )
+        expected_role_invisible = "usage != 'internal'"
+
         # Editable: Manager/System, no readonly
         editable = [f for f in role_fields if f.get("readonly") != "1"]
         self.assertEqual(len(editable), 1)
-        groups_edit = editable[0].get("groups", "")
-        self.assertIn("wms_core.group_wms_manager", groups_edit)
-        self.assertIn("base.group_system", groups_edit)
-        inv_edit = editable[0].get("invisible", "")
-        self.assertIn("usage", inv_edit)
+        self.assertEqual(
+            self._parse_groups(editable[0]),
+            {"wms_core.group_wms_manager", "base.group_system"},
+        )
+        self.assertEqual(
+            self._normalize_expr(editable[0].get("invisible", "")),
+            expected_role_invisible,
+        )
 
         # Readonly: base.group_user exclusions
         readonly = [f for f in role_fields if f.get("readonly") == "1"]
         self.assertEqual(len(readonly), 1)
-        groups_ro = readonly[0].get("groups", "")
-        self.assertIn("base.group_user", groups_ro)
-        self.assertIn("!wms_core.group_wms_manager", groups_ro)
-        self.assertIn("!base.group_system", groups_ro)
-        inv_ro = readonly[0].get("invisible", "")
-        self.assertIn("usage", inv_ro)
+        self.assertEqual(
+            self._parse_groups(readonly[0]),
+            {
+                "base.group_user",
+                "!wms_core.group_wms_manager",
+                "!base.group_system",
+            },
+        )
+        self.assertEqual(
+            self._normalize_expr(readonly[0].get("invisible", "")),
+            expected_role_invisible,
+        )
