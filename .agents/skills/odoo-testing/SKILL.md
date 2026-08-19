@@ -398,4 +398,56 @@ kubectl exec -it $ODOO_POD -n odoo -- odoo --test-enable \
 3. ¿Se verifican las invariantes CORE relevantes?
 4. ¿Se testea la seguridad (acceso por grupo)?
 5. ¿Los tests son independientes entre sí?
-6. ¿Se ejecutan sin errores? → `docker compose exec odoo odoo --test-enable --stop-after-init -i <modulo> -d odoo_test`
+6. ¿Se ejecutan sin errores? → ver sección "Ejecución con Docker Compose"
+
+---
+
+## Ejecución con Docker Compose
+
+### ⚠️ Incompatibilidad Entrypoint Docker + Subcomandos Odoo 19
+
+El entrypoint oficial de `odoo:19.0` detecta comandos que empiezan con `odoo` e inyecta
+`--db_host`, `--db_port`, `--db_user`, `--db_password` **al final** del comando.
+
+Esto funciona para `odoo server` pero **colisiona** con los subcomandos `db` y `module`
+porque los argumentos quedan DESPUÉS del nombre de la DB o módulo.
+
+**Regla:**
+
+| Operación | Entrypoint | Sintaxis |
+|---|---|---|
+| `db init` / `db init --force` | `--entrypoint ""` | `odoo db --db_host db --db_port 5432 -r odoo -w <pass> init [--force] <db>` |
+| `module install` | Normal (sin bypass) | `odoo --stop-after-init -i <module> -d <db>` |
+| `module upgrade` | Normal (sin bypass) | `odoo --stop-after-init -u <module> -d <db>` |
+| `tests` | Normal (sin bypass) | `odoo --test-enable --stop-after-init -d <db> --test-tags /<module>` |
+
+### Secuencia completa de verificación
+
+```bash
+# 0. Reset de odoo_test (DESECHABLE — siempre --force)
+docker compose run --rm --entrypoint "" odoo odoo \
+  db --db_host db --db_port 5432 -r odoo -w $DB_PASS \
+  init --force odoo_test
+
+# 1. Install
+docker compose run --rm odoo odoo \
+  --stop-after-init -i <module> -d odoo_test
+
+# 2. Upgrade (idempotencia)
+docker compose run --rm odoo odoo \
+  --stop-after-init -u <module> -d odoo_test
+
+# 3. Tests
+docker compose run --rm odoo odoo \
+  --test-enable --stop-after-init -d odoo_test \
+  --test-tags /<module>
+```
+
+### Verificación esperada
+
+```text
+0 failed, 0 error(s) of N tests
+```
+
+Si hay errores, el log mostrará líneas con `ERROR` o `FAIL` que indican qué test falló.
+
