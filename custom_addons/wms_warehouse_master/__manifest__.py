@@ -22,6 +22,9 @@ models.
         "wms_core",
         "stock",
     ],
+    "data": [
+        "views/stock_location_views.xml",
+    ],
     "installable": True,
     "application": False,
     "auto_install": False,

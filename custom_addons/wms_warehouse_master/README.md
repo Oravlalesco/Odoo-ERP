@@ -54,6 +54,26 @@ function of a location within the WMS.
 
 ---
 
+## Seguridad de administración
+
+### Quién puede modificar `wms_location_role`
+
+| Rol | Leer | Modificar |
+|---|---|---|
+| Operator WMS | ✅ (según permisos nativos) | ❌ |
+| Supervisor WMS | ✅ (según permisos nativos) | ❌ |
+| Manager WMS | ✅ | ✅ |
+| System Admin | ✅ | ✅ |
+
+La protección es **server-side** (override de `create`/`write`).
+La UI la refleja (`readonly` para usuarios sin permisos), pero no la sustituye.
+
+No se crean ACLs ni record rules adicionales: las ACL de Odoo son
+a nivel de modelo y aditivas, no pueden restringir un solo campo.
+
+---
+
+
 ## Future Responsibilities
 
 As the WMS evolves, this module will contain:
