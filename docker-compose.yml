@@ -49,6 +49,12 @@ services:
       - ./docker/odoo/odoo.conf:/etc/odoo/odoo.conf:ro
     networks:
       - odoo-network
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8069/web/version')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   odoo-db-data:
