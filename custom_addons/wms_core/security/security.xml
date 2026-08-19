@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- ================================================================== -->
+    <!-- 1. MODULE CATEGORY                                                  -->
+    <!-- ================================================================== -->
+    <record id="module_category_wms" model="ir.module.category">
+        <field name="name">WMS</field>
+        <field name="description">Warehouse Management System modules</field>
+        <field name="sequence">50</field>
+    </record>
+
+    <!-- ================================================================== -->
+    <!-- 2. PRIVILEGES (res.groups.privilege)                                -->
+    <!--    Each privilege groups the access levels of a feature area        -->
+    <!-- ================================================================== -->
+
+    <!-- Privilege: WMS Operations (floor execution) -->
+    <record id="privilege_wms_operations" model="res.groups.privilege">
+        <field name="name">WMS Operations</field>
+        <field name="category_id" ref="module_category_wms"/>
+        <field name="sequence">10</field>
+    </record>
+
+    <!-- Privilege: WMS Configuration (administrative setup) -->
+    <record id="privilege_wms_configuration" model="res.groups.privilege">
+        <field name="name">WMS Configuration</field>
+        <field name="category_id" ref="module_category_wms"/>
+        <field name="sequence">20</field>
+    </record>
+
+    <!-- ================================================================== -->
+    <!-- 3. GROUPS (res.groups)                                              -->
+    <!--    Use privilege_id, NOT category_id (Odoo 19 breaking change)     -->
+    <!-- ================================================================== -->
+
+    <!-- Group: Operator -->
+    <record id="group_wms_operator" model="res.groups">
+        <field name="name">Operator</field>
+        <field name="privilege_id" ref="privilege_wms_operations"/>
+        <field name="sequence">10</field>
+        <field name="comment">
+            Base identity for WMS floor operators.
+            Executes directed work: picks, puts, counts.
+            No direct CRUD on transactional models — mutations
+            will be performed via validated WMS commands.
+        </field>
+    </record>
+
+    <!-- Group: Supervisor (implies Operator) -->
+    <record id="group_wms_supervisor" model="res.groups">
+        <field name="name">Supervisor</field>
+        <field name="privilege_id" ref="privilege_wms_operations"/>
+        <field name="sequence">20</field>
+        <field name="implied_ids" eval="[(4, ref('group_wms_operator'))]"/>
+        <field name="comment">
+            Operational supervision. Everything an Operator can do,
+            plus exception management, work reassignment,
+            and control tower oversight.
+        </field>
+    </record>
+
+    <!-- Group: Manager (implies Supervisor) -->
+    <record id="group_wms_manager" model="res.groups">
+        <field name="name">Manager</field>
+        <field name="privilege_id" ref="privilege_wms_configuration"/>
+        <field name="sequence">30</field>
+        <field name="implied_ids" eval="[(4, ref('group_wms_supervisor'))]"/>
+        <field name="comment">
+            WMS administration and configuration.
+            Everything a Supervisor can do, plus warehouse setup,
+            zone configuration, queue policies, and resource management.
+        </field>
+    </record>
+</odoo>
