@@ -208,7 +208,18 @@ Warehouse → Zone → Activity Area
 
 **Nota:** No existe todavía un catálogo de tipos de actividad (`activity_type`).
 La relación `stock.location ↔ wms.activity.area` no está implementada todavía.
-La UI administrativa no está disponible todavía.
+
+**Administración UI:**
+- List / Form / Search disponibles
+- Menú: Inventory → Configuration → Warehouse Management → WMS Activity Areas
+- `zone_id` configurable, quick-create de Zone deshabilitado
+- `warehouse_id` / `company_id` derivados, readonly en UI
+- Manager / System Admin: administración
+- Operator / Supervisor: no reciben menú administrativo
+- Búsqueda: por nombre, código, zona, bodega, compañía
+- Filtro: Archivadas
+- Agrupación: por Zona, Bodega, Compañía
+- La seguridad server-side continúa autoritativa
 
 ---
 

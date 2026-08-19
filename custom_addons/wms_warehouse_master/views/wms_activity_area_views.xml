@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         WM-009: WMS Activity Area Administration UI
+         List, Form, Search, Action, Menu
+         ============================================================ -->
+
+    <!-- ==================== List View ==================== -->
+
+    <record id="view_wms_activity_area_list" model="ir.ui.view">
+        <field name="name">wms.activity.area.list</field>
+        <field name="model">wms.activity.area</field>
+        <field name="arch" type="xml">
+            <list string="WMS Activity Areas">
+                <field name="sequence" widget="handle"/>
+                <field name="code"/>
+                <field name="name"/>
+                <field name="zone_id"/>
+                <field name="warehouse_id"/>
+                <field name="company_id" optional="hide"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ==================== Form View ==================== -->
+
+    <record id="view_wms_activity_area_form" model="ir.ui.view">
+        <field name="name">wms.activity.area.form</field>
+        <field name="model">wms.activity.area</field>
+        <field name="arch" type="xml">
+            <form string="WMS Activity Area">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1>
+                            <field name="name"
+                                   placeholder="Nombre del área de actividad"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="code"/>
+                            <field name="zone_id"
+                                   options="{'no_create': True}"/>
+                            <field name="warehouse_id" readonly="1"/>
+                            <field name="company_id" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ==================== Search View ==================== -->
+
+    <record id="view_wms_activity_area_search" model="ir.ui.view">
+        <field name="name">wms.activity.area.search</field>
+        <field name="model">wms.activity.area</field>
+        <field name="arch" type="xml">
+            <search string="Buscar áreas de actividad WMS">
+                <field name="name"/>
+                <field name="code"/>
+                <field name="zone_id"/>
+                <field name="warehouse_id"/>
+                <field name="company_id"/>
+                <filter name="inactive"
+                        string="Archivadas"
+                        domain="[('active', '=', False)]"/>
+                <group>
+                    <filter name="group_zone"
+                            string="Zona"
+                            context="{'group_by': 'zone_id'}"/>
+                    <filter name="group_warehouse"
+                            string="Bodega"
+                            context="{'group_by': 'warehouse_id'}"/>
+                    <filter name="group_company"
+                            string="Compañía"
+                            context="{'group_by': 'company_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ==================== Action ==================== -->
+
+    <record id="action_wms_activity_area" model="ir.actions.act_window">
+        <field name="name">WMS Activity Areas</field>
+        <field name="res_model">wms.activity.area</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_wms_activity_area_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Crear un área de actividad WMS
+            </p>
+            <p>
+                Las áreas de actividad subdividen una zona para organizar
+                funcionalmente actividades futuras del WMS.
+            </p>
+        </field>
+    </record>
+
+    <!-- ==================== Menu ==================== -->
+
+    <menuitem id="menu_wms_activity_area"
+              name="WMS Activity Areas"
+              parent="stock.menu_warehouse_config"
+              action="action_wms_activity_area"
+              groups="wms_core.group_wms_manager,base.group_system"
+              sequence="51"/>
+
+</odoo>
