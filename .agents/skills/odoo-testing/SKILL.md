@@ -75,9 +75,11 @@ class TestWmsWork(TransactionCase):
         })
 
         # Crear producto de prueba
+        # Odoo 19: type='consu' (Bienes), 'service', 'combo'
+        # NO usar type='product' — fue eliminado en Odoo 19
         cls.product = cls.env['product.product'].create({
             'name': 'Producto Test',
-            'type': 'product',
+            'type': 'consu',
             'barcode': '7890001234567',
         })
 
@@ -171,7 +173,7 @@ class WmsTestCommon(TransactionCase):
         # Producto con perfil logístico
         cls.product_a = cls.env['product.product'].create({
             'name': 'SKU-A Test',
-            'type': 'product',
+            'type': 'consu',    # Odoo 19: 'consu' reemplaza 'product'
             'tracking': 'lot',
         })
 
@@ -189,27 +191,80 @@ class WmsTestCommon(TransactionCase):
             'wms_location_role': 'STORAGE',
         })
 
-    def _create_work(self, **kwargs):
-        """Helper para crear Works de prueba."""
-        defaults = {
-            'work_type_id': self.env.ref(
-                'wms_work_engine.work_type_pick').id,
-            'warehouse_id': self.warehouse.id,
-            'priority': 50,
-        }
-        defaults.update(kwargs)
-        return self.env['wms.work'].create(defaults)
+    # =========================================================================
+    # Helpers para crear stock en tests
+    # =========================================================================
+    #
+    # ⚠️ NO usar stock.quant.create() como patrón estándar.
+    # Crear quants directamente bypasea la lógica de Odoo (merge, validación,
+    # moves) y produce tests que pasan pero no reflejan el comportamiento real.
+    #
+    # Usar el helper adecuado según el nivel del test:
+    # =========================================================================
 
-    def _put_stock(self, product, location, qty, lot=None):
-        """Helper para agregar stock en una ubicación."""
-        quant = self.env['stock.quant'].create({
+    def _put_stock_via_inventory(self, product, location, qty, lot=None):
+        """
+        Crear stock mediante ajuste de inventario (inventory adjustment).
+        Usar para: tests funcionales y de comportamiento WMS.
+        Es el mecanismo estándar de Odoo para establecer stock inicial.
+        """
+        quant = self.env['stock.quant'].with_context(inventory_mode=True).create({
             'product_id': product.id,
             'location_id': location.id,
-            'quantity': qty,
+            'inventory_quantity': qty,
             'lot_id': lot.id if lot else False,
         })
+        quant.action_apply_inventory()
         return quant
+
+    def _put_stock_via_move(self, product, location_src, location_dest,
+                            qty, lot=None):
+        """
+        Crear stock mediante un stock.move confirmado y procesado.
+        Usar para: tests de flujo completo (inbound, putaway, transfer).
+        Replica el flujo real de Odoo desde una ubicación origen.
+        """
+        move = self.env['stock.move'].create({
+            'name': f'Test move {product.name}',
+            'product_id': product.id,
+            'product_uom_qty': qty,
+            'product_uom': product.uom_id.id,
+            'location_id': location_src.id,
+            'location_dest_id': location_dest.id,
+        })
+        move._action_confirm()
+        move._action_assign()
+        for ml in move.move_line_ids:
+            ml.quantity = ml.quantity_product_uom
+            if lot:
+                ml.lot_id = lot
+            ml.picked = True
+        move._action_done()
+        return move
+
+    def _put_stock_quick(self, product, location, qty, lot=None):
+        """
+        Crear stock con _update_available_quantity() del ORM.
+        Usar SOLO para: tests unitarios donde el foco NO es el flujo
+        de inventario y se necesita velocidad.
+        Justificar su uso con un comentario en el test.
+        """
+        self.env['stock.quant']._update_available_quantity(
+            product, location, qty, lot_id=lot,
+        )
 ```
+
+### Cuándo Usar Cada Helper de Stock
+
+| Helper | Nivel del test | Cuándo usar |
+|---|---|---|
+| `_put_stock_via_inventory()` | **Funcional** | Tests de comportamiento WMS: allocation, picking, replenishment. Es el patrón por defecto. |
+| `_put_stock_via_move()` | **Flujo completo** | Tests que validan un flujo end-to-end (inbound → putaway → storage). |
+| `_put_stock_quick()` | **Unitario** | Tests donde el stock es solo un prerequisito y el foco es otra lógica. Requiere justificación. |
+
+> **⚠️ Nunca usar `stock.quant.create({'quantity': X})`** como patrón estándar.
+> Bypasea `_merge_quants()`, validaciones y el flujo de moves. Produce tests
+> que pasan manipulando quants directamente pero fallan en el flujo real de Odoo.
 
 ### Usar la clase base
 
@@ -272,7 +327,7 @@ class TestWmsWorkSecurity(WmsTestCommon):
         cls.operator_user = cls.env['res.users'].create({
             'name': 'Operador Test',
             'login': 'operator_test',
-            'groups_id': [(6, 0, [
+            'group_ids': [(6, 0, [
                 cls.env.ref('wms_work_engine.group_wms_operator').id,
             ])],
         })

@@ -42,14 +42,45 @@ Los ADRs documentados en `docs/05-decisiones/01-adr.md` son **obligatorios**. De
 ## Entorno de Desarrollo
 
 - **Desarrollo local**: Docker Compose (`docker compose up -d --build`)
-- **Producción**: Kubernetes (K3s/K8s) con Kustomize
-- **Actualizar módulo en desarrollo**: `docker compose exec odoo odoo -u <module_name> -d <db_name> --stop-after-init`
+- **Bases de datos**: `odoo_dev` (desarrollo), `odoo_test` (tests) — NUNCA `odoo_production`
+- **Actualizar módulo**: `docker compose exec odoo odoo -u <module_name> -d odoo_dev --stop-after-init`
+- **Ejecutar tests**: `docker compose exec odoo odoo --test-enable --stop-after-init -i <module_name> -d odoo_test`
+- **Producción**: Solo vía CI/CD → migration gate → immutable image → rolling deployment
+- **⛔ PROHIBIDO**: Acceso directo del agente o desarrollador a BD de producción (`kubectl exec`, `docker compose exec` contra producción)
 
 ## Convenciones de Código Odoo
 
 - Los modelos heredan de `models.Model` (datos persistentes) o `models.TransientModel` (wizards)
 - Usar `_inherit` para extender modelos de Odoo, no copiar código
 - Los campos `Many2one` siempre deben tener `ondelete` definido
-- Las `_sql_constraints` son preferibles a `@api.constrains` para validaciones de unicidad
+- Usar `models.Constraint()` para constraints SQL (no `_sql_constraints` — legacy eliminado en Odoo 19)
 - Nunca usar `sudo()` sin justificación documentada
 - Los métodos de negocio deben tener docstring en español
+
+## ⚠️ Breaking Changes de Odoo 19 (vs versiones anteriores)
+
+Estas diferencias causan errores de instalación si se usa la sintaxis vieja:
+
+| Concepto | ❌ Sintaxis vieja | ✅ Odoo 19 |
+|---|---|---|
+| Tipo de producto almacenable | `type='product'` | `type='consu'` (Bienes) |
+| Grupos de seguridad | `<field name="category_id" ref="..."/>` en `res.groups` | `<field name="privilege_id" ref="..."/>` — requiere `res.groups.privilege` |
+| Grupos del usuario (Python) | `user.groups_id` | `user.group_ids` |
+| SQL Constraints | `_sql_constraints = [(...)]` | `_name = models.Constraint('SQL', 'msg')` como atributo de clase |
+| Índices compuestos | Sin API declarativa | `_name = models.Index('(col1, col2)')` como atributo de clase |
+| HTTP route type | `type='json'` | `type='jsonrpc'` |
+| HTTP auth por token | `auth='api_key'` | `auth='bearer'` |
+
+### Tipos de producto válidos en Odoo 19
+
+- `consu` — Bienes (productos físicos/almacenables)
+- `service` — Servicio
+- `combo` — Combo
+
+### Autenticación HTTP válida en Odoo 19
+
+- `user` — Sesión de usuario Odoo (cookie)
+- `bearer` — Token Bearer en header `Authorization`
+- `public` — Sin autenticación, usuario público
+- `none` — Sin autenticación ni usuario
+

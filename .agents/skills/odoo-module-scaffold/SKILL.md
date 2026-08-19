@@ -129,26 +129,34 @@ from . import work_type
 7. **Crear tests** en `tests/`
 8. **Instalar el módulo**:
 
-### Instalar/Actualizar vía Docker Compose
+### Instalar/Actualizar en desarrollo (Docker Compose)
 
 ```bash
 # Instalar módulo nuevo
-docker compose exec odoo odoo -i wms_work_engine -d odoo_production --stop-after-init
+docker compose exec odoo odoo -i wms_work_engine -d odoo_dev --stop-after-init
 
 # Actualizar módulo existente
-docker compose exec odoo odoo -u wms_work_engine -d odoo_production --stop-after-init
+docker compose exec odoo odoo -u wms_work_engine -d odoo_dev --stop-after-init
+
+# Ejecutar tests del módulo
+docker compose exec odoo odoo --test-enable --stop-after-init \
+    -i wms_work_engine -d odoo_test
 ```
 
-### Instalar/Actualizar vía Kubernetes
+### ⛔ Producción: NUNCA instalar/actualizar manualmente
 
-```bash
-ODOO_POD=$(kubectl get pods -n odoo -l app.kubernetes.io/name=odoo -o jsonpath="{.items[0].metadata.name}")
+```text
+PROHIBIDO:
+  kubectl exec → odoo -u → producción
+  docker compose exec → odoo -i → producción
+  Cualquier acceso directo del agente o desarrollador a BD de producción
 
-# Instalar
-kubectl exec -it $ODOO_POD -n odoo -- odoo -i wms_work_engine -d odoo_production --stop-after-init
-
-# Actualizar
-kubectl exec -it $ODOO_POD -n odoo -- odoo -u wms_work_engine -d odoo_production --stop-after-init
+Producción solo se despliega mediante:
+  CI/CD pipeline
+  → migration gate (ADR-022: backward-compatible)
+  → immutable image (ADR-027: versión fijada por digest)
+  → rolling deployment (pods viejos + nuevos coexisten ~5 min)
+  → health checks + smoke tests
 ```
 
 ## Orden de Declaración de Datos en `__manifest__.py`

@@ -24,7 +24,7 @@ Guía para crear y gestionar migraciones de datos y schema en módulos Odoo 19.
 | Cambiar tipo de campo | Sí — requiere conversión de datos |
 | Eliminar campo | Sí — limpieza y respaldo de datos |
 | Cambiar `_name` de modelo | Sí — renombrar tabla e ir.model.data |
-| Agregar `_sql_constraints` a datos existentes | Sí — datos existentes podrían violar la constraint |
+| Agregar `models.Constraint()` a datos existentes | Sí — datos existentes podrían violar la constraint |
 | Cambiar lógica de computed stored | No — se recalcula al actualizar |
 | Mover datos entre modelos | Sí — script de migración |
 | Cambiar versión del módulo | Automático — trigger para scripts de migración |
@@ -238,7 +238,7 @@ migrations/
 ## Mejores Prácticas
 
 1. **Siempre probar la migración** contra un respaldo de la BD de producción
-2. **Respaldar la BD** antes de cualquier migración: `./scripts/backup-db.ps1 -DbName "odoo_production"`
+2. **Respaldar la BD** antes de cualquier migración: `./scripts/backup-db.ps1 -DbName "odoo_dev"`
 3. **Usar SQL directo** para migraciones masivas (> 10,000 registros) en vez del ORM
 4. **Loggear** todo: registros afectados, errores encontrados, tiempo de ejecución
 5. **Hacer las migraciones idempotentes**: ejecutarlas dos veces debe producir el mismo resultado

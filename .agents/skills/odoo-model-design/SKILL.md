@@ -73,28 +73,54 @@ class WmsWork(models.Model):
     deadline = fields.Datetime(string='Fecha límite')
 ```
 
-### 3. Herencia por delegación (`_inherits`)
+### 3. Modelo satélite con relación 1:0..1 (Many2one + UNIQUE)
 
-Crea tabla nueva que extiende otra mediante un `Many2one` obligatorio. Se usa cuando el modelo nuevo **es un tipo de** otro modelo.
+Cuando un modelo WMS es un **complemento opcional** de un modelo de Odoo
+(no una especialización "es un tipo de"), usar `Many2one` + `models.Constraint(UNIQUE)`:
+
+```text
+1 product.template
+        │
+        │ 0..1
+        ▼
+wms.product.logistics
+```
 
 ```python
 class WmsProductLogistics(models.Model):
-    """Perfil logístico WMS del producto — one-to-one con product.template."""
+    """Perfil logístico WMS — complemento opcional de product.template."""
     _name = 'wms.product.logistics'
     _description = 'Perfil logístico WMS'
-    _inherits = {'product.template': 'product_tmpl_id'}
 
     product_tmpl_id = fields.Many2one(
         'product.template', required=True, ondelete='cascade',
-        string='Producto')
+        index=True, string='Producto')
     abc_class = fields.Selection([
         ('A', 'A — Alta rotación'),
         ('B', 'B — Media rotación'),
         ('C', 'C — Baja rotación'),
     ], string='Clase ABC', default='C')
+
+    # Garantiza relación 1:0..1 a nivel de base de datos
+    _product_tmpl_unique = models.Constraint(
+        'UNIQUE(product_tmpl_id)',
+        'Solo puede existir un perfil logístico por producto.')
 ```
 
-> **Precaución con `_inherits`**: Evaluar si realmente se necesita. En muchos casos es preferible un `Many2one` simple con un modelo independiente.
+### ⚠️ NO usar `_inherits` (delegation inheritance) en este proyecto
+
+`_inherits` delega **todos** los campos del modelo padre al hijo, creando
+la ilusión de que el hijo "es" el padre. Problemas:
+
+| Problema | Impacto |
+|---|---|
+| No garantiza 1:0..1 | Sin UNIQUE, múltiples registros pueden apuntar al mismo padre |
+| Delega toda la interfaz | `wms.product.logistics` expondría todos los campos de `product.template` |
+| Confunde la API | `logistics.name` devolvería el nombre del producto — ¿es eso lo que queremos? |
+| Complejidad en queries | JOINs implícitos en cada lectura |
+
+**Regla del proyecto**: Preferir `Many2one` + `UNIQUE constraint` sobre `_inherits` para modelos satélite WMS. Solo considerar `_inherits` si el modelo realmente **es un tipo de** otro (ej: una especialización que necesita comportarse como el padre en toda la API).
+
 
 ---
 
@@ -192,19 +218,46 @@ def _compute_units_per_pallet(self):
 
 ---
 
-## Constraints
+## Constraints e Índices (Odoo 19)
 
-### SQL Constraints (preferidas para unicidad)
+### models.Constraint (reemplaza `_sql_constraints`)
+
+Odoo 19 eliminó `_sql_constraints`. Las constraints se definen como atributos
+de clase con `models.Constraint`. El nombre del atributo **debe empezar con `_`**.
 
 ```python
-_sql_constraints = [
-    ('claim_token_unique',
-     'UNIQUE(claim_token)',
-     'El claim token debe ser único.'),
-    ('reference_unique',
-     'UNIQUE(reference)',
-     'La referencia de trabajo debe ser única.'),
-]
+class WmsWork(models.Model):
+    _name = 'wms.work'
+    _description = 'Trabajo WMS'
+
+    # ✅ Odoo 19: models.Constraint como atributo de clase
+    _claim_token_unique = models.Constraint(
+        'UNIQUE(claim_token)',
+        'El claim token debe ser único.')
+    _reference_unique = models.Constraint(
+        'UNIQUE(reference)',
+        'La referencia de trabajo debe ser única.')
+    _check_priority_range = models.Constraint(
+        'CHECK(priority >= 0 AND priority <= 100)',
+        'La prioridad debe estar entre 0 y 100.')
+
+    # ❌ LEGACY — NO usar en Odoo 19:
+    # _sql_constraints = [
+    #     ('claim_token_unique', 'UNIQUE(claim_token)', '...'),
+    # ]
+```
+
+### models.Index
+
+Para índices compuestos, usar `models.Index` como atributo de clase:
+
+```python
+class WmsWork(models.Model):
+    _name = 'wms.work'
+
+    # Índice compuesto para queries frecuentes
+    _state_priority_idx = models.Index('(state, priority DESC, deadline ASC)')
+    _queue_state_idx = models.Index('(queue_id, state)')
 ```
 
 ### Python Constraints
@@ -295,7 +348,7 @@ Para un resumen ejecutivo, ver [references/capability-matrix-summary.md](./refer
 
 1. ¿El modelo tiene `_description` en español?
 2. ¿Todos los `Many2one` tienen `ondelete` definido?
-3. ¿Los campos de unicidad usan `_sql_constraints`?
+3. ¿Las constraints usan `models.Constraint()` (no `_sql_constraints`)?
 4. ¿Se verificó la Capability Matrix para no recrear algo que Odoo ya tiene?
 5. ¿Se respetan los ADRs (011, 012, 013, 026)?
 6. ¿Los campos computed con `store=True` tienen `@api.depends` correcto?

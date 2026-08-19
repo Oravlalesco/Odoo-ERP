@@ -89,7 +89,7 @@ class WmsApiController(http.Controller):
     # Inventario (consulta)
     # =========================================================================
 
-    @http.route('/api/wms/v1/inventory', type='json', auth='user',
+    @http.route('/api/wms/v1/inventory', type='jsonrpc', auth='bearer',
                 methods=['GET'], csrf=False)
     def get_inventory(self, product_code=None, warehouse_code=None,
                       location_barcode=None, **kwargs):
@@ -127,7 +127,7 @@ class WmsApiController(http.Controller):
     # Órdenes de entrada (recepción)
     # =========================================================================
 
-    @http.route('/api/wms/v1/inbound-orders', type='json', auth='user',
+    @http.route('/api/wms/v1/inbound-orders', type='jsonrpc', auth='bearer',
                 methods=['POST'], csrf=False)
     def create_inbound_order(self, **kwargs):
         """
@@ -165,12 +165,22 @@ class WmsApiController(http.Controller):
 
 ### Autenticación
 
+Odoo 19 soporta los siguientes tipos de autenticación en `http.route`:
+
+| Valor | Significado |
+|---|---|
+| `user` | Sesión de usuario Odoo (cookie) — para backoffice |
+| `bearer` | Token Bearer en header `Authorization` — para APIs externas |
+| `public` | Sin autenticación, usuario público |
+| `none` | Sin autenticación ni usuario |
+
+Para APIs del WMS consumidas por sistemas externos, usar `auth='bearer'`:
+
 ```python
-# API Key authentication
-@http.route('/api/wms/v1/status', type='json', auth='api_key',
+@http.route('/api/wms/v1/status', type='jsonrpc', auth='bearer',
             methods=['GET'], csrf=False)
 def get_status(self):
-    """Endpoint con autenticación por API key."""
+    """Endpoint con autenticación Bearer token."""
     return {'status': 'ok', 'version': '1.0'}
 ```
 
@@ -214,10 +224,10 @@ class WmsInbox(models.Model):
         string='Recibido', default=fields.Datetime.now)
     processed_at = fields.Datetime(string='Procesado')
 
-    _sql_constraints = [
-        ('message_id_unique', 'UNIQUE(message_id)',
-         'El ID del mensaje debe ser único (idempotencia).'),
-    ]
+    # Odoo 19: models.Constraint reemplaza _sql_constraints
+    _message_id_unique = models.Constraint(
+        'UNIQUE(message_id)',
+        'El ID del mensaje debe ser único (idempotencia).')
 ```
 
 ### Procesador de Inbox (Cron)
@@ -297,11 +307,10 @@ class WmsOutbox(models.Model):
     sent_at = fields.Datetime(string='Enviado')
     target_system = fields.Char(string='Sistema destino')
 
-    _sql_constraints = [
-        ('event_unique',
-         'UNIQUE(event_type, correlation_id, created_at)',
-         'Evento duplicado detectado.'),
-    ]
+    # Odoo 19: models.Constraint reemplaza _sql_constraints
+    _event_unique = models.Constraint(
+        'UNIQUE(event_type, correlation_id, created_at)',
+        'Evento duplicado detectado.')
 ```
 
 ### Procesador de Outbox (Cron)
