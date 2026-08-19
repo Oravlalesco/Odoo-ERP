@@ -174,11 +174,48 @@ El navigation shell WMS dedicado queda diferido.
 
 ---
 
+### Activity Area (`wms.activity.area`)
+
+Subdivisión funcional de una zona WMS.
+
+**Jerarquía:**
+```text
+Warehouse → Zone → Activity Area
+```
+
+**Campo owner:**
+- `zone_id` — `Many2one("wms.zone")`, required, `ondelete='restrict'`
+
+**Campos derivados:**
+- `warehouse_id` — `related="zone_id.warehouse_id"`, stored, readonly
+- `company_id` — `related="zone_id.company_id"`, stored, readonly
+
+**Identidad operacional:**
+- `(zone_id, code)` — UNIQUE constraint a nivel DB
+- Mismo código en zonas diferentes: permitido
+- Código normalizado: `strip().upper()`
+- Código vacío: rechazado
+
+**Seguridad:**
+- Operator / Supervisor: sólo lectura
+- Manager / System Admin: CRUD completo
+- Multi-company: record rule global `[('company_id', 'in', company_ids)]`
+
+**Lifecycle:**
+- `Zone.unlink()` con Activity Areas → `restrict` (error)
+- Archivar Zone no elimina Activity Areas
+- Cambiar `zone_id` actualiza warehouse/company automáticamente
+
+**Nota:** No existe todavía un catálogo de tipos de actividad (`activity_type`).
+La relación `stock.location ↔ wms.activity.area` no está implementada todavía.
+La UI administrativa no está disponible todavía.
+
+---
+
 ## Future Responsibilities
 
 As the WMS evolves, this module will contain:
 
-- Activity areas
 - Storage types and physical capacities
 - Operational restrictions per location
 - Travel / pick sequencing attributes

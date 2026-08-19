@@ -2,3 +2,6 @@ id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_wms_zone_operator,wms.zone operator,model_wms_zone,wms_core.group_wms_operator,1,0,0,0
 access_wms_zone_manager,wms.zone manager,model_wms_zone,wms_core.group_wms_manager,1,1,1,1
 access_wms_zone_system,wms.zone system admin,model_wms_zone,base.group_system,1,1,1,1
+access_wms_activity_area_operator,wms.activity.area operator,model_wms_activity_area,wms_core.group_wms_operator,1,0,0,0
+access_wms_activity_area_manager,wms.activity.area manager,model_wms_activity_area,wms_core.group_wms_manager,1,1,1,1
+access_wms_activity_area_system,wms.activity.area system admin,model_wms_activity_area,base.group_system,1,1,1,1

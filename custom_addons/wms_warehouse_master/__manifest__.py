@@ -24,6 +24,7 @@ models.
     ],
     "data": [
         "security/wms_zone_security.xml",
+        "security/wms_activity_area_security.xml",
         "security/ir.model.access.csv",
         "views/stock_location_views.xml",
         "views/wms_zone_views.xml",
