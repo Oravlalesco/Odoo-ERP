@@ -18,6 +18,9 @@ Domain functionality lives in specialized modules
     "category": "Warehouse/WMS",
     "license": "LGPL-3",
     "depends": ["base"],
+    "data": [
+        "security/security.xml",
+    ],
     "installable": True,
     "application": False,
     "auto_install": False,
