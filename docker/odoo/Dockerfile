@@ -1,7 +1,7 @@
 # ==============================================================================
 # Dockerfile para Odoo 19 con soporte para Addons personalizados ERP/WMS/TMS
 # ==============================================================================
-FROM odoo:19.0
+FROM odoo:19.0@sha256:4a96c54e7ccddc83ab3baba00be8f7cac418cbd5bd0291247ed1bba8bbd5d5e7
 
 
 USER root

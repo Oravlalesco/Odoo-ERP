@@ -67,6 +67,7 @@
 | 06 | [Disponibilidad](03-plataforma/06-disponibilidad.md) | Idempotencia, concurrencia, HA | v1.0 |
 | **07** | [**DEV vs PROD**](03-plataforma/07-plataforma-dev-vs-prod.md) | **Diferencias infraestructura dev/prod** | v1.1 |
 | **08** | [**NFR Workload Model**](03-plataforma/08-nfr-workload-model.md) | **Volúmenes, SLOs, dimensionamiento** | v1.2 |
+| **09** | [**Odoo Baseline Registry**](03-plataforma/09-odoo-baseline-registry.md) | **Pin de imagen, source SHA, runtime digest** | v1.0 |
 
 ---
 
