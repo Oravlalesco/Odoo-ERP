@@ -170,3 +170,30 @@ class TestStockLocationAdmin(TransactionCase):
                 "location_id": self.parent_location.location_id.id,
                 "wms_location_role": "STORAGE",
             })
+
+    # ------------------------------------------------------------------
+    # Protección contra bypass por default de contexto
+    # ------------------------------------------------------------------
+
+    def test_wm_admin_10_operator_blocked_by_context_default(self):
+        """TEST-WM-ADMIN-010: Operator + default_wms_location_role en contexto → AccessError."""
+        with self.assertRaises(AccessError):
+            self.Location.with_user(self.operator_user).with_context(
+                default_wms_location_role="STORAGE",
+            ).create({
+                "name": "Bypass Attempt",
+                "usage": "internal",
+                "location_id": self.parent_location.id,
+            })
+
+    def test_wm_admin_11_manager_allowed_by_context_default(self):
+        """TEST-WM-ADMIN-011: Manager + default_wms_location_role → creación permitida."""
+        loc = self.Location.with_user(self.manager_user).with_context(
+            default_wms_location_role="STORAGE",
+        ).create({
+            "name": "Good Mgr Context",
+            "usage": "internal",
+            "location_id": self.parent_location.id,
+        })
+        self.assertEqual(loc.wms_location_role, "STORAGE")
+

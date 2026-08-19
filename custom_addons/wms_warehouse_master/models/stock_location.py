@@ -97,9 +97,27 @@ class StockLocation(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        """Proteger la asignación de rol WMS durante la creación."""
+        """Proteger la asignación de rol WMS durante la creación.
+
+        Verifica tanto el valor explícito en vals como el valor
+        que default_get() pueda inyectar (ej. default_wms_location_role
+        en el contexto).
+        """
+        needs_default = any(
+            "wms_location_role" not in vals for vals in vals_list
+        )
+        default_role = (
+            self.default_get(["wms_location_role"]).get("wms_location_role")
+            if needs_default
+            else False
+        )
         for vals in vals_list:
-            if vals.get("wms_location_role"):
+            role = (
+                vals["wms_location_role"]
+                if "wms_location_role" in vals
+                else default_role
+            )
+            if role:
                 self._check_wms_role_authorization()
                 break
         return super().create(vals_list)

@@ -27,7 +27,7 @@
                 <!-- Sólo lectura: usuarios internos sin permisos de edición WMS -->
                 <field name="wms_location_role"
                        readonly="1"
-                       groups="!wms_core.group_wms_manager,!base.group_system"
+                       groups="base.group_user,!wms_core.group_wms_manager,!base.group_system"
                        invisible="usage != 'internal'"/>
             </xpath>
         </field>
