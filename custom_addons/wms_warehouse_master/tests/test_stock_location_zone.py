@@ -141,6 +141,7 @@ class TestStockLocationZone(TransactionCase):
         self.assertFalse(field.required)
         self.assertEqual(field.ondelete, "restrict")
         self.assertTrue(field.check_company)
+        self.assertTrue(field.index)
         self.assertTrue(field.copy)
 
     # ------------------------------------------------------------------
@@ -306,7 +307,12 @@ class TestStockLocationZone(TransactionCase):
         Incluye locations archivadas.
         """
         self.loc_a1.write({"wms_zone_id": self.zone_a1.id})
-        # Even if location is archived
+        # Zone archive does NOT break the relationship
+        self.zone_a1.write({"active": False})
+        self.assertEqual(self.loc_a1.wms_zone_id, self.zone_a1)
+        self.assertFalse(self.zone_a1.active)
+        self.zone_a1.write({"active": True})
+        # Even if location is archived, warehouse change is blocked
         self.loc_a1.write({"active": False})
         with self.assertRaises(ValidationError):
             self.zone_a1.write({"warehouse_id": self.warehouse_a2.id})
@@ -346,6 +352,20 @@ class TestStockLocationZone(TransactionCase):
             loc.with_user(self.supervisor_user).write({
                 "wms_zone_id": self.zone_a1.id,
             })
+        # Assign zone as superuser for clear tests
+        loc.write({"wms_zone_id": self.zone_a1.id})
+        # Operator cannot clear zone
+        with self.assertRaises(AccessError):
+            loc.with_user(self.operator_user).write({
+                "wms_zone_id": False,
+            })
+        # Supervisor cannot clear zone
+        with self.assertRaises(AccessError):
+            loc.with_user(self.supervisor_user).write({
+                "wms_zone_id": False,
+            })
+        # Zone still assigned after failed clears
+        self.assertEqual(loc.wms_zone_id, self.zone_a1)
 
     # ------------------------------------------------------------------
     # TEST-LOC-ZONE-015: RBAC manager/admin allowed
