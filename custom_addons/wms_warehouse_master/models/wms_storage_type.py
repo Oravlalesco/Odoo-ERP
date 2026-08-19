@@ -103,7 +103,32 @@ class WmsStorageType(models.Model):
         return super().create(vals_list)
 
     def write(self, vals):
-        """Normalizar código durante la escritura."""
+        """Normalizar código y proteger cambio de compañía.
+
+        Si company_id cambia, verificar que ninguna ubicación
+        (activa o archivada) referencia este Storage Type.
+        """
         if "code" in vals:
             vals["code"] = self._normalize_code(vals["code"])
+        if "company_id" in vals:
+            for rec in self:
+                if rec.company_id.id != vals["company_id"]:
+                    locations = self.env["stock.location"].with_context(
+                        active_test=False,
+                    ).search([
+                        ("wms_storage_type_id", "=", rec.id),
+                    ], limit=1)
+                    if locations:
+                        raise ValidationError(
+                            _(
+                                "No se puede cambiar la compañía del tipo "
+                                "de almacenamiento '%(st)s' porque está "
+                                "asignado a la ubicación '%(location)s'. "
+                                "Desasigne primero todas las ubicaciones."
+                            )
+                            % {
+                                "st": rec.display_name,
+                                "location": locations[0].display_name,
+                            }
+                        )
         return super().write(vals)

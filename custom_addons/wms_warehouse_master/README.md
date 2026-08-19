@@ -258,8 +258,17 @@ wms.storage.type         → infraestructura física (PALLET_RACK / SHELF / ...)
 - Manager / System Admin administran; Operator / Supervisor no reciben menú
 - La seguridad server-side continúa autoritativa
 
+**Relación `stock.location ↔ wms.storage.type`:**
+- `wms_storage_type_id` Many2one en `stock.location`
+- Opcional (default=False), restrict, check_company, copy
+- Invariantes: usage=internal, company_id != False, misma company
+- No requiere warehouse ni zone asignados
+- Ortogonal a `wms_location_role` y `wms_zone_id`
+- Cambio de company en ST bloqueado cuando tiene locations (activas o archivadas)
+- Archivar ST no rompe relaciones existentes
+- Seguridad de mutación: misma política unificada (Manager/System)
+
 **Nota:** No existe un catálogo hardcoded de tipos (PALLET, SHELF, etc.).
-La relación `stock.location ↔ wms.storage.type` no está implementada todavía.
 No hay capacidades físicas (peso, volumen, temperatura) todavía.
 
 ---
