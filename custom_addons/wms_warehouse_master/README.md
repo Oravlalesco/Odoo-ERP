@@ -74,11 +74,46 @@ a nivel de modelo y aditivas, no pueden restringir un solo campo.
 ---
 
 
+---
+
+### `wms.zone` (modelo propio WMS)
+
+Agrupación lógica dentro de un warehouse para clasificación
+operacional y futura distribución de ubicaciones, recursos y trabajo.
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `name` | Char | Nombre humano de la zona |
+| `code` | Char(32) | Identificador operacional (auto-uppercase, trim) |
+| `warehouse_id` | Many2one | Bodega propietaria (restrict) |
+| `company_id` | Related | Derivada de `warehouse_id.company_id` |
+| `active` | Boolean | Permite archivar |
+| `sequence` | Integer | Ordenamiento configurable |
+
+**Reglas:**
+- Identidad operacional: `warehouse_id + code`.
+- `code` se normaliza automáticamente (strip + uppercase).
+- `code` es único por warehouse (constraint DB).
+- Compañía no se administra independientemente.
+- Las ubicaciones todavía NO están asignadas a zonas.
+
+**Seguridad:**
+
+| Rol | Leer | Crear | Escribir | Eliminar |
+|---|---|---|---|---|
+| Operator WMS | ✅ | ❌ | ❌ | ❌ |
+| Supervisor WMS | ✅ | ❌ | ❌ | ❌ |
+| Manager WMS | ✅ | ✅ | ✅ | ✅ |
+| System Admin | ✅ | ✅ | ✅ | ✅ |
+
+Aislamiento multi-company mediante record rule global.
+
+---
+
 ## Future Responsibilities
 
 As the WMS evolves, this module will contain:
 
-- `wms.zone` — logical grouping of locations for work distribution
 - Activity areas
 - Storage types and physical capacities
 - Operational restrictions per location

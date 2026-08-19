@@ -23,6 +23,8 @@ models.
         "stock",
     ],
     "data": [
+        "security/wms_zone_security.xml",
+        "security/ir.model.access.csv",
         "views/stock_location_views.xml",
     ],
     "installable": True,
