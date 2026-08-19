@@ -20,7 +20,7 @@ WMS_LOCATION_ROLES = [
 ]
 
 # Fields that constitute WMS configuration on stock.location.
-_WMS_CONFIG_FIELDS = {"wms_location_role", "wms_zone_id"}
+_WMS_CONFIG_FIELDS = {"wms_location_role", "wms_zone_id", "wms_storage_type_id"}
 
 
 class StockLocation(models.Model):
@@ -33,6 +33,10 @@ class StockLocation(models.Model):
     WM-006: wms_zone_id enlaza la ubicación con una Zone WMS
     del mismo warehouse y compañía.
 
+    WM-013: wms_storage_type_id enlaza la ubicación con un
+    Storage Type de la misma compañía.  No requiere warehouse
+    ni zone: el catálogo es company-scoped.
+
     Invariantes para wms_zone_id:
     - usage == 'internal'
     - warehouse_id != False
@@ -40,9 +44,15 @@ class StockLocation(models.Model):
     - company_id != False
     - zone.company_id == location.company_id
 
-    Seguridad de mutación (WM-003 / WM-006):
+    Invariantes para wms_storage_type_id:
+    - usage == 'internal'
+    - company_id != False
+    - storage_type.company_id == location.company_id
+
+    Seguridad de mutación (WM-003 / WM-006 / WM-013):
     Sólo wms_core.group_wms_manager, base.group_system o superuser
-    pueden crear/escribir wms_location_role o wms_zone_id.
+    pueden crear/escribir wms_location_role, wms_zone_id o
+    wms_storage_type_id.
     La protección es server-side; la UI la refleja pero no la sustituye.
     """
 
@@ -71,6 +81,20 @@ class StockLocation(models.Model):
             "Zona WMS a la que pertenece esta ubicación. "
             "Debe pertenecer al mismo warehouse y compañía. "
             "Sólo válido en ubicaciones internas con warehouse asignado."
+        ),
+    )
+    wms_storage_type_id = fields.Many2one(
+        "wms.storage.type",
+        string="WMS Storage Type",
+        default=False,
+        ondelete="restrict",
+        check_company=True,
+        index=True,
+        copy=True,
+        help=(
+            "Tipo de almacenamiento físico de esta ubicación. "
+            "Debe pertenecer a la misma compañía. "
+            "No requiere warehouse ni zona asignados."
         ),
     )
 
@@ -169,7 +193,58 @@ class StockLocation(models.Model):
                 )
 
     # ------------------------------------------------------------------
-    # Autorización de configuración WMS (WM-003 / WM-006)
+    # Constraint WM-013: Storage Type consistency
+    # ------------------------------------------------------------------
+
+    @api.constrains("wms_storage_type_id", "usage", "company_id")
+    def _check_wms_storage_type_consistency(self):
+        """Validar las 3 invariantes de la relación location ↔ storage type.
+
+        Si wms_storage_type_id != False:
+        1. usage == 'internal'
+        2. company_id != False
+        3. storage_type.company_id == location.company_id
+        """
+        for loc in self:
+            st = loc.wms_storage_type_id
+            if not st:
+                continue
+            if loc.usage != "internal":
+                raise ValidationError(
+                    _(
+                        "El tipo de almacenamiento WMS sólo puede asignarse "
+                        "a ubicaciones internas. '%(location)s' tiene "
+                        "usage='%(usage)s'."
+                    )
+                    % {"location": loc.display_name, "usage": loc.usage}
+                )
+            if not loc.company_id:
+                raise ValidationError(
+                    _(
+                        "La ubicación '%(location)s' es compartida "
+                        "(sin compañía) y no puede tener un tipo de "
+                        "almacenamiento WMS company-owned."
+                    )
+                    % {"location": loc.display_name}
+                )
+            if st.company_id != loc.company_id:
+                raise ValidationError(
+                    _(
+                        "El tipo de almacenamiento '%(st)s' pertenece a "
+                        "la compañía '%(st_co)s', pero la ubicación "
+                        "'%(location)s' pertenece a '%(loc_co)s'. "
+                        "Deben coincidir."
+                    )
+                    % {
+                        "st": st.display_name,
+                        "st_co": st.company_id.display_name,
+                        "location": loc.display_name,
+                        "loc_co": loc.company_id.display_name,
+                    }
+                )
+
+    # ------------------------------------------------------------------
+    # Autorización de configuración WMS (WM-003 / WM-006 / WM-013)
     # ------------------------------------------------------------------
 
     def _check_wms_location_configuration_authorization(self):
@@ -178,7 +253,7 @@ class StockLocation(models.Model):
         Autorizado: superuser, base.group_system, wms_core.group_wms_manager.
         Cualquier otro usuario recibe AccessError.
 
-        Aplica a: wms_location_role, wms_zone_id.
+        Aplica a: wms_location_role, wms_zone_id, wms_storage_type_id.
         """
         if self.env.su:
             return
@@ -190,8 +265,9 @@ class StockLocation(models.Model):
         raise AccessError(
             _(
                 "No tiene permisos para modificar la configuración WMS "
-                "de la ubicación (rol o zona). Sólo el Manager WMS o el "
-                "Administrador del sistema pueden cambiar esta clasificación."
+                "de la ubicación (rol, zona o tipo de almacenamiento). "
+                "Sólo el Manager WMS o el Administrador del sistema "
+                "pueden cambiar esta clasificación."
             )
         )
 
@@ -229,17 +305,23 @@ class StockLocation(models.Model):
         return super().create(vals_list)
 
     def write(self, vals):
-        """Proteger la modificación de configuración WMS y validar zone.
+        """Proteger la modificación de configuración WMS y validar relations.
 
         Sólo bloquea si un campo WMS está en vals Y su valor realmente
-        cambia. Después de super().write(), revalida zone consistency
-        si algún campo relevante fue modificado.
+        cambia. Para Many2one, compara record.id vs vals[field] (int/False).
+        Después de super().write(), revalida zone y storage type
+        consistency si algún campo relevante fue modificado.
         """
         wms_fields_in_vals = _WMS_CONFIG_FIELDS.intersection(vals)
         if wms_fields_in_vals:
             for location in self:
                 for field in wms_fields_in_vals:
-                    if location[field] != vals[field]:
+                    current = location[field]
+                    new_val = vals[field]
+                    # Many2one: compare record.id (int) vs vals (int/False)
+                    if hasattr(current, "id"):
+                        current = current.id
+                    if current != new_val:
                         self._check_wms_location_configuration_authorization()
                         break
                 else:
@@ -256,6 +338,15 @@ class StockLocation(models.Model):
             zoned = self.filtered("wms_zone_id")
             if zoned:
                 zoned._check_wms_zone_consistency()
+
+        # Post-write storage type consistency check
+        st_relevant = {
+            "wms_storage_type_id", "usage", "company_id",
+        }
+        if st_relevant.intersection(vals):
+            typed = self.filtered("wms_storage_type_id")
+            if typed:
+                typed._check_wms_storage_type_consistency()
 
         return result
 
