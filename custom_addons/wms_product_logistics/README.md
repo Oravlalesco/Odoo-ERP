@@ -32,7 +32,7 @@ Rather than polluting Odoo's core `product.template` with dozens of WMS-specific
 product.template (Odoo) ◄─── (1:1) ───► wms.product.logistics (WMS)
 ```
 
-- **Odoo 19 Reutilization**: Reutiliza el maestro de productos de Odoo 19 (`product.template`, `product.product`, `product.uom`).
+- **Odoo 19 Reutilization**: Reutiliza el maestro de productos de Odoo 19 (`product.template`, `product.product`). La representación operacional de UOM/packaging será verificada contra el pinned Odoo 19 y congelada antes de PLM-002.
 - **WMS Scope**: Perfil logístico WMS (`wms.product.logistics`), cálculos Ti-Hi, umbrales de vida útil, clasificaciones de temperatura/hazmat y perfiles de política WMS.
 
 > [!NOTE]
