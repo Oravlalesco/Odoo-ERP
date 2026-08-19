@@ -25,11 +25,39 @@ but never overrides their core behavior.
 
 ---
 
+## Current Capabilities
+
+### `wms_location_role` (stock.location extension)
+
+A `Selection` field on `stock.location` identifying the operational
+function of a location within the WMS.
+
+| Role | Description |
+|---|---|
+| `RECEIVING` | Inbound receiving area |
+| `QUALITY_HOLD` | Quality inspection hold |
+| `QUARANTINE` | Quarantine isolation |
+| `DAMAGE` | Damaged goods area |
+| `STORAGE` | Primary bulk storage |
+| `RESERVE_STORAGE` | Reserve / overflow storage |
+| `PICK_FACE` | Forward pick location |
+| `CONSOLIDATION` | Order consolidation area |
+| `PACKING` | Packing station |
+| `STAGING` | Outbound staging |
+| `CROSS_DOCK` | Cross-dock flow-through |
+| `DOCK` | Shipping/receiving dock |
+
+**Rules:**
+- Default is `False` (location not classified by WMS).
+- Only valid on locations with `usage='internal'`.
+- Does **not** replace or modify `stock.location.usage`.
+
+---
+
 ## Future Responsibilities
 
 As the WMS evolves, this module will contain:
 
-- `wms_location_role` — operational function of a location (STORAGE, RECEIVING, STAGING, DOCK, etc.)
 - `wms.zone` — logical grouping of locations for work distribution
 - Activity areas
 - Storage types and physical capacities
