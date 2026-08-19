@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        WM-003: Herencia de stock.view_location_form.
+        Inserta wms_location_role en el grupo "Additional Information",
+        después de usage.
+
+        Dos apariciones del campo para controlar edición:
+        - Editable: visible sólo para WMS Manager / System Admin
+        - Sólo lectura: visible para el resto de usuarios internos
+
+        Ambas invisibles cuando usage != 'internal'.
+    -->
+
+    <record id="view_location_form_wms_role" model="ir.ui.view">
+        <field name="name">stock.location.form.wms_role</field>
+        <field name="model">stock.location</field>
+        <field name="inherit_id" ref="stock.view_location_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group[@name='additional_info']/field[@name='usage']"
+                   position="after">
+                <!-- Editable: WMS Manager o System Admin -->
+                <field name="wms_location_role"
+                       groups="wms_core.group_wms_manager,base.group_system"
+                       invisible="usage != 'internal'"/>
+                <!-- Sólo lectura: usuarios internos sin permisos de edición WMS -->
+                <field name="wms_location_role"
+                       readonly="1"
+                       groups="base.group_user,!wms_core.group_wms_manager,!base.group_system"
+                       invisible="usage != 'internal'"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
