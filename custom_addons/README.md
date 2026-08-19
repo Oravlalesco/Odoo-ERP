@@ -51,25 +51,37 @@ custom_addons/
 Cada módulo debe pasar esta secuencia antes de merge:
 
 ```bash
-# 1. Install desde cero (odoo_test limpia)
+# 0. Reset de odoo_test (DESECHABLE — siempre --force)
+#
+#    ⚠️  db init requiere --entrypoint "" porque el entrypoint oficial
+#    de odoo:19.0 inyecta --db_host/--db_port/--db_user/--db_password
+#    DESPUÉS del comando, colisionando con los subcomandos posicionales
+#    de Odoo 19 (db, module). Verificado durante BOOT-005.
+#
 docker compose run --rm --entrypoint "" odoo odoo \
-  --db_host db --db_port 5432 -r odoo -w <pass> \
-  db init --force odoo_test
+  db --db_host db --db_port 5432 -r odoo -w <pass> \
+  init --force odoo_test
 
-docker compose run --rm --entrypoint "" odoo odoo \
-  --db_host db --db_port 5432 -r odoo -w <pass> \
-  module install <module_name> -d odoo_test
+# 1. Install (entrypoint normal — flags de conexión se inyectan correctamente)
+#
+#    Nota: Odoo 19 CLI documenta `odoo module install`, pero ese subcomando
+#    presenta el mismo conflicto con el entrypoint Docker de nuestra imagen.
+#    Usamos el flag -i del comando server, validado operacionalmente.
+#
+docker compose run --rm odoo odoo \
+  --stop-after-init -i <module_name> -d odoo_test
 
 # 2. Upgrade (idempotencia)
-docker compose run --rm --entrypoint "" odoo odoo \
-  --db_host db --db_port 5432 -r odoo -w <pass> \
-  module upgrade <module_name> -d odoo_test
+#
+#    Misma consideración que install: usamos -u en lugar de `module upgrade`.
+#
+docker compose run --rm odoo odoo \
+  --stop-after-init -u <module_name> -d odoo_test
 
 # 3. Tests
-docker compose run --rm --entrypoint "" odoo odoo \
-  -c /etc/odoo/odoo.conf \
-  --db_host db --db_port 5432 -r odoo -w <pass> \
-  --test-enable --stop-after-init -d odoo_test
+docker compose run --rm odoo odoo \
+  --test-enable --stop-after-init -d odoo_test \
+  --test-tags /<module_name>
 ```
 
 ## Referencias
