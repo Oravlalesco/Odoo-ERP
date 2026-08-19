@@ -119,12 +119,20 @@ class TestWmsActivityAreaUI(TransactionCase):
         )
         list_arch = etree.fromstring(list_view.arch)
         list_fields = {f.get("name") for f in list_arch.iter("field")}
-        for field in ("sequence", "code", "name", "zone_id",
-                      "warehouse_id", "company_id", "active"):
-            self.assertIn(
-                field, list_fields,
-                f"Campo '{field}' no encontrado en list view",
-            )
+        self.assertEqual(
+            list_fields,
+            {
+                "sequence",
+                "code",
+                "name",
+                "zone_id",
+                "warehouse_id",
+                "company_id",
+                "active",
+            },
+        )
+        # No inline editing
+        self.assertIsNone(list_arch.get("editable"))
 
         # --- Form ---
         form_view = self.env.ref(
@@ -134,12 +142,18 @@ class TestWmsActivityAreaUI(TransactionCase):
         form_fields_map = {
             f.get("name"): f for f in form_arch.iter("field")
         }
-        for field in ("name", "code", "zone_id", "warehouse_id",
-                      "company_id", "sequence", "active"):
-            self.assertIn(
-                field, form_fields_map,
-                f"Campo '{field}' no encontrado en form view",
-            )
+        self.assertEqual(
+            set(form_fields_map),
+            {
+                "name",
+                "code",
+                "zone_id",
+                "warehouse_id",
+                "company_id",
+                "sequence",
+                "active",
+            },
+        )
 
         # warehouse_id readonly="1"
         self.assertEqual(
@@ -170,24 +184,36 @@ class TestWmsActivityAreaUI(TransactionCase):
         )
         search_arch = etree.fromstring(search_view.arch)
 
-        # Search fields
+        # Search fields — exact set
         search_fields = {
             f.get("name") for f in search_arch.iter("field")
         }
-        for field in ("name", "code", "zone_id", "warehouse_id",
-                      "company_id"):
-            self.assertIn(
-                field, search_fields,
-                f"Campo '{field}' no encontrado en search view",
-            )
+        self.assertEqual(
+            search_fields,
+            {
+                "name",
+                "code",
+                "zone_id",
+                "warehouse_id",
+                "company_id",
+            },
+        )
 
-        # Filters
+        # Filters — exact set
         filters = {
             f.get("name"): f for f in search_arch.iter("filter")
         }
+        self.assertEqual(
+            set(filters),
+            {
+                "inactive",
+                "group_zone",
+                "group_warehouse",
+                "group_company",
+            },
+        )
 
-        # Archived filter
-        self.assertIn("inactive", filters)
+        # Archived filter domain
         self.assertEqual(
             self._normalize_expr(filters["inactive"].get("domain", "")),
             "[('active', '=', False)]",
