@@ -24,7 +24,7 @@ class WmsProductLogistics(models.Model):
     """
 
     _name = "wms.product.logistics"
-    _description = "WMS Product Logistics Profile"
+    _description = "Perfil logístico WMS de producto"
     _order = "product_tmpl_id, id"
     _rec_name = "product_tmpl_id"
 

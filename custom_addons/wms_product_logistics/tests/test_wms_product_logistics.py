@@ -80,7 +80,9 @@ class TestWmsProductLogistics(TransactionCase):
         """PLM-002-001: modelo registrado con campos y metadatos correctos."""
         WPL = self.env["wms.product.logistics"]
         self.assertEqual(WPL._name, "wms.product.logistics")
-        self.assertEqual(WPL._description, "WMS Product Logistics Profile")
+        self.assertEqual(
+            WPL._description, "Perfil logístico WMS de producto",
+        )
         self.assertEqual(WPL._rec_name, "product_tmpl_id")
 
         # product_tmpl_id
@@ -90,17 +92,27 @@ class TestWmsProductLogistics(TransactionCase):
         self.assertTrue(f.index)
         self.assertEqual(f.ondelete, "cascade")
 
-        # company_id — related, stored, readonly
+        # company_id — related to product_tmpl_id.company_id, stored, readonly
         co_f = WPL._fields["company_id"]
         self.assertEqual(co_f.comodel_name, "res.company")
         self.assertTrue(co_f.store)
         self.assertTrue(co_f.readonly)
         self.assertTrue(co_f.index)
+        self.assertTrue(co_f.related)
+        self.assertEqual(
+            co_f.related.split("."),
+            ["product_tmpl_id", "company_id"],
+        )
 
-        # active — related, stored, readonly
+        # active — related to product_tmpl_id.active, stored, readonly
         active_f = WPL._fields["active"]
         self.assertTrue(active_f.store)
         self.assertTrue(active_f.readonly)
+        self.assertTrue(active_f.related)
+        self.assertEqual(
+            active_f.related.split("."),
+            ["product_tmpl_id", "active"],
+        )
 
     # ------------------------------------------------------------------
     # PLM-002-002: Minimal create
@@ -187,7 +199,7 @@ class TestWmsProductLogistics(TransactionCase):
     # ------------------------------------------------------------------
 
     def test_plm_007_archive_reactivate_lifecycle(self):
-        """PLM-002-007: archive product → profile inactive; reactivate → active."""
+        """PLM-002-007: archive/reactivate con active_test completo."""
         product = self.ProductTemplate.create({
             "name": "Lifecycle Test",
             "company_id": self.company_a.id,
@@ -202,58 +214,112 @@ class TestWmsProductLogistics(TransactionCase):
         profile.invalidate_recordset()
         self.assertFalse(profile.active)
 
-        # Reactivate
+        # Profile disappears from normal search (active_test=True)
+        visible = self.WPL.search([("id", "=", profile.id)])
+        self.assertFalse(visible)
+
+        # Profile still exists with active_test=False
+        hidden = self.WPL.with_context(active_test=False).search([
+            ("id", "=", profile.id),
+        ])
+        self.assertEqual(hidden, profile)
+
+        # Reactivate product
         product.write({"active": True})
         profile.invalidate_recordset()
         self.assertTrue(profile.active)
+
+        # Profile visible again in normal search
+        visible_again = self.WPL.search([("id", "=", profile.id)])
+        self.assertEqual(visible_again, profile)
 
     # ------------------------------------------------------------------
     # PLM-002-008: Operator read-only
     # ------------------------------------------------------------------
 
     def test_plm_008_operator_read_only(self):
-        """PLM-002-008: Operator puede leer pero no mutate."""
+        """PLM-002-008: Operator puede leer, create/write/unlink denegados."""
         profiles = self.WPL.with_user(self.operator_user).search([])
         self.assertTrue(len(profiles) > 0)
 
+        # Create denied
         with self.assertRaises(AccessError):
             self.WPL.with_user(self.operator_user).create({
                 "product_tmpl_id": self.product_global.id,
             })
+        # Write denied
+        product_wr = self.ProductTemplate.create({
+            "name": "Op Write Test",
+            "company_id": self.company_a.id,
+        })
+        profile_wr = self.WPL.create({
+            "product_tmpl_id": product_wr.id,
+        })
         with self.assertRaises(AccessError):
-            self.profile_a.with_user(self.operator_user).unlink()
+            profile_wr.with_user(self.operator_user).write({
+                "product_tmpl_id": self.product_global.id,
+            })
+        # Unlink denied
+        with self.assertRaises(AccessError):
+            profile_wr.with_user(self.operator_user).unlink()
 
     # ------------------------------------------------------------------
     # PLM-002-009: Supervisor read-only
     # ------------------------------------------------------------------
 
     def test_plm_009_supervisor_read_only(self):
-        """PLM-002-009: Supervisor puede leer pero no mutate."""
+        """PLM-002-009: Supervisor puede leer, create/write/unlink denegados."""
         profiles = self.WPL.with_user(self.supervisor_user).search([])
         self.assertTrue(len(profiles) > 0)
 
+        # Create denied
         with self.assertRaises(AccessError):
             self.WPL.with_user(self.supervisor_user).create({
                 "product_tmpl_id": self.product_global.id,
             })
+        # Write denied
+        product_wr = self.ProductTemplate.create({
+            "name": "Sup Write Test",
+            "company_id": self.company_a.id,
+        })
+        profile_wr = self.WPL.create({
+            "product_tmpl_id": product_wr.id,
+        })
         with self.assertRaises(AccessError):
-            self.profile_a.with_user(self.supervisor_user).unlink()
+            profile_wr.with_user(self.supervisor_user).write({
+                "product_tmpl_id": self.product_global.id,
+            })
+        # Unlink denied
+        with self.assertRaises(AccessError):
+            profile_wr.with_user(self.supervisor_user).unlink()
 
     # ------------------------------------------------------------------
     # PLM-002-010: Manager CRUD
     # ------------------------------------------------------------------
 
     def test_plm_010_manager_crud(self):
-        """PLM-002-010: Manager puede CRUD completo."""
+        """PLM-002-010: Manager puede CRUD completo incluyendo write."""
         product = self.ProductTemplate.create({
             "name": "Manager CRUD",
             "company_id": self.company_a.id,
         })
+        product_2 = self.ProductTemplate.create({
+            "name": "Manager CRUD Target",
+            "company_id": self.company_a.id,
+        })
+        # Create
         profile = self.WPL.with_user(self.manager_user).create({
             "product_tmpl_id": product.id,
         })
         self.assertTrue(profile.id)
+        # Read
         profile.with_user(self.manager_user).read(["product_tmpl_id"])
+        # Update
+        profile.with_user(self.manager_user).write({
+            "product_tmpl_id": product_2.id,
+        })
+        self.assertEqual(profile.product_tmpl_id, product_2)
+        # Delete
         profile.with_user(self.manager_user).unlink()
         self.assertFalse(profile.exists())
 
@@ -262,16 +328,28 @@ class TestWmsProductLogistics(TransactionCase):
     # ------------------------------------------------------------------
 
     def test_plm_011_system_admin_crud(self):
-        """PLM-002-011: System Admin puede CRUD completo."""
+        """PLM-002-011: System Admin puede CRUD completo incluyendo write."""
         product = self.ProductTemplate.create({
             "name": "Admin CRUD",
             "company_id": self.company_a.id,
         })
+        product_2 = self.ProductTemplate.create({
+            "name": "Admin CRUD Target",
+            "company_id": self.company_a.id,
+        })
+        # Create
         profile = self.WPL.with_user(self.admin_user).create({
             "product_tmpl_id": product.id,
         })
         self.assertTrue(profile.id)
+        # Read
         profile.with_user(self.admin_user).read(["product_tmpl_id"])
+        # Update
+        profile.with_user(self.admin_user).write({
+            "product_tmpl_id": product_2.id,
+        })
+        self.assertEqual(profile.product_tmpl_id, product_2)
+        # Delete
         profile.with_user(self.admin_user).unlink()
         self.assertFalse(profile.exists())
 
@@ -287,7 +365,7 @@ class TestWmsProductLogistics(TransactionCase):
         })
         self.assertFalse(profile_g.company_id)
 
-        # Product in Company B
+        # Product in Company B (with profile)
         product_b = self.ProductTemplate.with_company(
             self.company_b,
         ).create({
@@ -296,6 +374,14 @@ class TestWmsProductLogistics(TransactionCase):
         })
         profile_b = self.WPL.with_company(self.company_b).create({
             "product_tmpl_id": product_b.id,
+        })
+
+        # Second product in Company B WITHOUT profile (for create test)
+        product_b2 = self.ProductTemplate.with_company(
+            self.company_b,
+        ).create({
+            "name": "Product B2 No Profile",
+            "company_id": self.company_b.id,
         })
 
         # User A only — sees A + global, NOT B
@@ -314,6 +400,18 @@ class TestWmsProductLogistics(TransactionCase):
         self.assertIn(self.profile_a, visible)
         self.assertIn(profile_g, visible)
         self.assertNotIn(profile_b, visible)
+
+        # Direct read of profile_b by User A → AccessError
+        with self.assertRaises(AccessError):
+            self.WPL.with_user(user_a).browse(profile_b.id).read(
+                ["product_tmpl_id"],
+            )
+
+        # Manager A creating profile on B2 product → AccessError
+        with self.assertRaises(AccessError):
+            self.WPL.with_user(user_a).create({
+                "product_tmpl_id": product_b2.id,
+            })
 
         # User A+B — sees all
         user_ab = self.env["res.users"].create({

@@ -51,12 +51,18 @@ product.template (Odoo) ◄─── (1:0..1) ───► wms.product.logistics
 - Manager / System Admin: CRUD completo
 - Record rule: `parent_of` + global products (company_id=False)
 
-- **Odoo 19 Reutilization**: Reutiliza el maestro de productos de Odoo 19 (`product.template`, `product.product`). La representación operacional de UOM/packaging será verificada contra el pinned Odoo 19 y congelada antes de PLM-003.
+- **Odoo 19 Reutilization**: Reutiliza el maestro de productos de Odoo 19 (`product.template`, `product.product`). La revisión contra el pinned Odoo 19 source está completada (ver nota abajo).
 - **WMS Scope**: Perfil logístico WMS (`wms.product.logistics`), cálculos Ti-Hi, umbrales de vida útil, clasificaciones de temperatura/hazmat y perfiles de política WMS.
 
 > [!NOTE]
-> **Odoo 19 Packaging / UOM Representation**:
-> Odoo 19 source verification is pending for the final packaging/UOM mapping before PLM-003. The operational packaging/UOM representation will be verified and frozen prior to extending `wms.product.logistics` with packaging fields.
+> **Odoo 19 Packaging / UOM — Investigación completada (PLM-002)**:
+> La revisión del pinned Odoo 19 source confirmó que la representación
+> de unidades de medida usa `uom.uom` y `product.uom` (asociado a
+> variante/UOM para barcode de packaging).  El supuesto documental
+> previo basado en `product.packaging` no es directamente implementable
+> sobre el pinned Odoo 19 tal como se encuentra actualmente.
+> **La decisión operacional definitiva queda diferida a PLM-003.**
+> No se implementa ningún campo de packaging/UOM en PLM-002.
 
 ---
 

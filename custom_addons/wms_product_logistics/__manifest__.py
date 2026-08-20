@@ -15,7 +15,7 @@ Dominio del Kernel WMS que define el perfil logístico de cada producto:
 
 Este módulo establece la base del dominio definido por ADR-024.
 El modelo wms.product.logistics y su relación one-to-one con
-product.template se introducirán en PLM-002.
+product.template están implementados desde PLM-002.
     """,
     "author": "WMS Project",
     "version": "19.0.1.0.0",
