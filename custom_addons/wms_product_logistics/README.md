@@ -18,7 +18,7 @@ It defines the operational and logistical characteristics of products required b
 - Domain strategy profiles (Storage, Putaway, Replenishment, Allocation).
 - Quality inspection triggers and sampling rules.
 
-> **Current Status**: **PLM-002 — Core Identity & One-to-One Link**. El modelo `wms.product.logistics` está implementado como companion 1:1 de `product.template`.
+> **Current Status**: **PLM-003A — Operational UOM Roles**. Roles UOM operacionales (pick, case, pallet) implementados sobre `wms.product.logistics`.
 
 ---
 
@@ -51,18 +51,25 @@ product.template (Odoo) ◄─── (1:0..1) ───► wms.product.logistics
 - Manager / System Admin: CRUD completo
 - Record rule: `parent_of` + global products (company_id=False)
 
-- **Odoo 19 Reutilization**: Reutiliza el maestro de productos de Odoo 19 (`product.template`, `product.product`). La revisión contra el pinned Odoo 19 source está completada (ver nota abajo).
-- **WMS Scope**: Perfil logístico WMS (`wms.product.logistics`), cálculos Ti-Hi, umbrales de vida útil, clasificaciones de temperatura/hazmat y perfiles de política WMS.
+**Campos funcionales (PLM-003A):**
+- `pick_uom_id` → uom.uom, optional, restrict. Acepta uom_id base O uom_ids.
+- `case_uom_id` → uom.uom, optional, restrict. Sólo uom_ids (packaging adicional).
+- `pallet_uom_id` → uom.uom, optional, restrict. Sólo uom_ids (packaging adicional).
+- Constraint server-side valida pertenencia al producto.
+- Reasignar product_tmpl_id revalida UOM seleccionadas.
+
+- **Odoo 19 Reutilization**: Reutiliza `product.template.uom_id` (base) y `product.template.uom_ids` (packagings como Many2many `uom.uom`). `product.uom` es la asociación variante+UOM+barcode, no se usa como FK del perfil.
 
 > [!NOTE]
-> **Odoo 19 Packaging / UOM — Investigación completada (PLM-002)**:
-> La revisión del pinned Odoo 19 source confirmó que la representación
-> de unidades de medida usa `uom.uom` y `product.uom` (asociado a
-> variante/UOM para barcode de packaging).  El supuesto documental
-> previo basado en `product.packaging` no es directamente implementable
-> sobre el pinned Odoo 19 tal como se encuentra actualmente.
-> **La decisión operacional definitiva queda diferida a PLM-003.**
-> No se implementa ningún campo de packaging/UOM en PLM-002.
+> **Odoo 19 Packaging / UOM — Decisión implementada (PLM-003A)**:
+> La revisión del pinned Odoo 19 source (`95f76213d3f...`) confirmó que
+> `product.packaging` no existe en este pin. Odoo 19 usa:
+> - `product.template.uom_id` → UOM base (required)
+> - `product.template.uom_ids` → Many2many `uom.uom` (packagings adicionales)
+> - `product.uom` → asociación variante + UOM + barcode
+>
+> Los roles UOM operacionales apuntan directamente a `uom.uom`.
+> **Ti-Hi y cantidades derivadas quedan diferidas a PLM-003B.**
 
 ---
 
@@ -73,8 +80,9 @@ All items below represent future development stages:
 | Task | Capability | Status |
 |---|---|---|
 | **PLM-001** | Module Scaffold & Baseline (`wms_core`, `product`) | ✅ Merged |
-| **PLM-002** | Core Identity & One-to-One Link (`wms.product.logistics ↔ product.template`) | ✅ Current |
-| **PLM-003** | Operational Packagings / UOMs & Ti-Hi calculations | ⏳ Future |
+| **PLM-002** | Core Identity & One-to-One Link (`wms.product.logistics ↔ product.template`) | ✅ Merged |
+| **PLM-003A** | Operational UOM Roles (`pick_uom_id`, `case_uom_id`, `pallet_uom_id`) | ✅ Current |
+| **PLM-003B** | Ti-Hi Configuration & Derived Quantities | ⏳ Future |
 | **PLM-004** | Classifications & Handling Attributes (ABC, Velocity, Temp, Hazmat, Stack) | ⏳ Future |
 | **PLM-005** | Shelf Life Controls & HU Restrictions | ⏳ Future |
 | **PLM-006** | Strategy Profiles & Quality Configuration | ⏳ Future |

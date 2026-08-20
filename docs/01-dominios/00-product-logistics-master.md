@@ -38,8 +38,8 @@ Reutilizamos extensivamente los modelos de producto de Odoo:
 | `product.template.barcode` | Código de barras | ✅ |
 | `product.template.categ_id` | Categoría | ✅ |
 | `uom.uom` / `product.template.uom_id` | Unidad de medida base | ✅ |
-| `product.template.uom_po_id` | UOM de compra | ✅ |
-| `product.packaging` | Packaging definidos: nombre, qty, barcode | ✅ |
+| `product.template.uom_ids` | Packagings adicionales (Many2many `uom.uom`) | ✅ |
+| `product.uom` | Asociación variante + UOM + barcode de packaging | ✅ |
 | `stock.lot.use_expiration_date` | Control de expiración | ✅ |
 | `stock.lot.expiration_date` | Fecha de expiración | ✅ |
 | `stock.lot.use_date` | Best before date | ✅ |
@@ -60,36 +60,37 @@ Modelo nuevo, **one-to-one con `product.template`**, que contiene toda la inform
 | `gtin` | Global Trade Item Number | Código GTIN del producto |
 | `additional_barcodes` | Additional Barcodes | Códigos de barras alternativos |
 
-### UOM y Packaging Operacionales (v1.2)
+### UOM Operacionales (PLM-003A)
 
-> ⚠️ La v1.1 mezclaba `uom.uom` con `product.packaging`. Son conceptos distintos:
+> **Corrección v1.3 (PLM-003A):** La v1.2 proponía `product.packaging` como FK.
+> La verificación del pinned Odoo 19 (`95f76213d3f...`) demostró que
+> `product.packaging` no existe. En su lugar, Odoo 19 usa:
 >
-> `uom.uom` = Unidad de medida abstracta: Unidad, Kg, Litro, Metro
->
-> `product.packaging` = Configuración física: Caja de 12, Pallet de 576
+> - `product.template.uom_id` → UOM base (required, Many2one `uom.uom`)
+> - `product.template.uom_ids` → Packagings adicionales (Many2many `uom.uom`)
+> - `product.uom` → Asociación variante + UOM + barcode (para resolución de barcodes)
 
-El WMS referencia **packagings** para operaciones, no UOM:
+El WMS referencia **`uom.uom`** para roles operacionales:
 
-| Campo | En inglés | Significado | Referencia a | Ejemplo |
+| Campo | En inglés | Significado | Referencia a | Semántica |
 |---|---|---|---|---|
-| `pick_packaging_id` | Pick Packaging | Packaging en que se recolecta normalmente | `product.packaging` | Inner Box (qty=6) |
-| `case_packaging_id` | Case Packaging | Packaging de caja | `product.packaging` | Case (qty=12) |
-| `pallet_packaging_id` | Pallet Packaging | Packaging de pallet | `product.packaging` | Pallet (qty=576) |
-
-Estos apuntan a registros de `product.packaging` de Odoo que ya definen `qty` y `barcode`:
+| `pick_uom_id` | Pick UOM | UOM de pick | `uom.uom` | uom_id (base) O uom_ids |
+| `case_uom_id` | Case UOM | UOM de case | `uom.uom` | sólo uom_ids |
+| `pallet_uom_id` | Pallet UOM | UOM de pallet | `uom.uom` | sólo uom_ids |
 
 ```text
-product.packaging "Inner Box": qty=6, barcode=7890001
-product.packaging "Case":      qty=12, barcode=7890002
-product.packaging "Pallet":    qty=576 (12 cases × 48 cases/pallet)
+product.template "SKU-A":
+  uom_id = Units (base)
+  uom_ids = [Box of 12, Case of 24, Pallet of 576]
 
 wms.product.logistics:
-  pick_packaging_id → references packaging "Inner Box"
-  case_packaging_id → references packaging "Case"
-  pallet_packaging_id → references packaging "Pallet"
+  pick_uom_id   → Units (base) o Box of 12
+  case_uom_id   → Case of 24
+  pallet_uom_id → Pallet of 576
 ```
 
 La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin modificación.
+Las cantidades (Ti-Hi) quedan diferidas a PLM-003B.
 
 ### Configuración de Pallet (Ti-Hi)
 
@@ -162,8 +163,8 @@ La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin mo
 | Modelo | Qué reutilizamos |
 |---|---|
 | `product.product` / `product.template` | Maestro de productos |
-| `product.packaging` | Packaging con qty y barcode |
-| `uom.uom` | Unidades de medida |
+| `uom.uom` | Unidades de medida + packagings (via `uom_ids`) |
+| `product.uom` | Asociación variante + UOM + barcode |
 | `stock.lot` | Lotes con fechas de expiración |
 
 ### Modelos Nuevos

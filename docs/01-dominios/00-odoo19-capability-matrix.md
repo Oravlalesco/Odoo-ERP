@@ -218,8 +218,8 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 |---|---|---|
 | `product.template` / `product.product` | ✅ Reutilizar | Maestro de productos |
 | `tracking` (none/lot/serial) | ✅ Reutilizar | Control por lote/serial |
-| `uom_id` / `uom_po_id` | ✅ Reutilizar | Unidades de medida |
-| `product.packaging` (name, qty, barcode) | ✅ Reutilizar | Packaging: Box of 12, Pallet of 48, etc. |
+| `uom_id` / `uom_ids` | ✅ Reutilizar | UOM base + packagings adicionales (`Many2many uom.uom`) |
+| `product.uom` (barcode association) | ✅ Reutilizar | Asociación variante + UOM + barcode |
 | `weight` / `volume` | ✅ Reutilizar | Peso y volumen |
 | `use_expiration_date` / `expiration_date` | ✅ Reutilizar | Vida útil (en `stock.lot`) |
 | `categ_id` | ✅ Reutilizar | Categoría |
@@ -227,7 +227,7 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | WMS Logistics Profile | 🆕 Crear WMS | Ver [Product Logistics Master](00-product-logistics-master.md) |
 | ABC class, velocity class | 🆕 Crear WMS | Clasificación de rotación |
 | Temperature class, hazmat class | 🆕 Crear WMS | Clases operacionales |
-| Pick packaging, case packaging, pallet packaging | 🔧 Extender | Vía `product.packaging` + `wms.product.logistics` (`pick_packaging_id`, `case_packaging_id`, `pallet_packaging_id`) |
+| Pick UOM, case UOM, pallet UOM | 🔧 Extender | Vía `uom.uom` + `wms.product.logistics` (`pick_uom_id`, `case_uom_id`, `pallet_uom_id`). PLM-003A. |
 | Units per case, cases per layer, layers per pallet | 🆕 Crear WMS | Configuración logística |
 | Storage/putaway/replenishment/allocation profiles | 🆕 Crear WMS | Perfiles WMS |
 
