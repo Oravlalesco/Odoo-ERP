@@ -1,5 +1,6 @@
 from odoo import _, api, fields, models
 from odoo.exceptions import ValidationError
+from odoo.tools.float_utils import float_compare
 
 
 class WmsProductLogistics(models.Model):
@@ -7,6 +8,7 @@ class WmsProductLogistics(models.Model):
 
     PLM-002: Identidad core y link one-to-one.
     PLM-003A: Roles UOM operacionales (pick, case, pallet).
+    PLM-003B: Configuración Ti-Hi y cantidades derivadas.
 
     Cada product.template puede tener como máximo un perfil
     logístico WMS.  El perfil no se crea automáticamente;
@@ -21,6 +23,13 @@ class WmsProductLogistics(models.Model):
         pick_uom_id      → UOM de pick (base o packaging)
         case_uom_id      → UOM de case (sólo packaging)
         pallet_uom_id    → UOM de pallet (sólo packaging)
+
+    Campos funcionales (PLM-003B):
+        cases_per_layer     → Cajas por capa (Ti, WMS-owned)
+        layers_per_pallet   → Capas por pallet (Hi, WMS-owned)
+        base_qty_per_case   → Cantidad base por caja (derived Odoo UOM)
+        cases_per_pallet    → Cajas por pallet (derived Odoo UOM)
+        base_qty_per_pallet → Cantidad base por pallet (derived Odoo UOM)
 
     Lifecycle:
         - Crear producto no crea perfil
@@ -84,6 +93,82 @@ class WmsProductLogistics(models.Model):
     )
 
     # ------------------------------------------------------------------
+    # PLM-003B: Ti-Hi Configuration & Derived Quantities
+    # ------------------------------------------------------------------
+
+    cases_per_layer = fields.Integer(
+        string="Cajas por capa (Ti)",
+        help="Número de cajas por capa en el pallet (Ti). "
+        "0 indica no configurado.",
+    )
+    layers_per_pallet = fields.Integer(
+        string="Capas por pallet (Hi)",
+        help="Número de capas por pallet (Hi). "
+        "0 indica no configurado.",
+    )
+
+    base_qty_per_case = fields.Float(
+        string="Cantidad base por caja",
+        compute="_compute_derived_quantities",
+        readonly=True,
+        store=False,
+        help="Cantidad de unidades base por caja, derivada de la UOM de case.",
+    )
+    cases_per_pallet = fields.Float(
+        string="Cajas por pallet",
+        compute="_compute_derived_quantities",
+        readonly=True,
+        store=False,
+        help="Cantidad de cajas por pallet, derivada de la UOM de pallet y case.",
+    )
+    base_qty_per_pallet = fields.Float(
+        string="Cantidad base por pallet",
+        compute="_compute_derived_quantities",
+        readonly=True,
+        store=False,
+        help="Cantidad de unidades base por pallet, derivada de la UOM de pallet.",
+    )
+
+    @api.depends(
+        "product_tmpl_id.uom_id",
+        "product_tmpl_id.uom_id.factor",
+        "case_uom_id",
+        "case_uom_id.factor",
+        "pallet_uom_id",
+        "pallet_uom_id.factor",
+    )
+    def _compute_derived_quantities(self):
+        for profile in self:
+            product = profile.product_tmpl_id
+            base_uom = product.uom_id if product else False
+            case_uom = profile.case_uom_id
+            pallet_uom = profile.pallet_uom_id
+
+            # base_qty_per_case
+            if case_uom and base_uom:
+                profile.base_qty_per_case = case_uom._compute_quantity(
+                    1.0, base_uom, round=False,
+                )
+            else:
+                profile.base_qty_per_case = 0.0
+
+            # cases_per_pallet
+            if pallet_uom and case_uom:
+                profile.cases_per_pallet = pallet_uom._compute_quantity(
+                    1.0, case_uom, round=False,
+                )
+            else:
+                profile.cases_per_pallet = 0.0
+
+            # base_qty_per_pallet
+            if pallet_uom and base_uom:
+                profile.base_qty_per_pallet = pallet_uom._compute_quantity(
+                    1.0, base_uom, round=False,
+                )
+            else:
+                profile.base_qty_per_pallet = 0.0
+
+    # ------------------------------------------------------------------
     # Constraints
     # ------------------------------------------------------------------
 
@@ -137,3 +222,67 @@ class WmsProductLogistics(models.Model):
                         uom=profile.pallet_uom_id.name,
                         product=product.display_name,
                     ))
+
+    @api.constrains(
+        "cases_per_layer",
+        "layers_per_pallet",
+        "case_uom_id",
+        "pallet_uom_id",
+        "product_tmpl_id",
+    )
+    def _check_tihi_configuration(self):
+        """Validar coherencia de la configuración Ti-Hi con las UOM de Odoo.
+
+        - Ti y Hi deben configurarse juntos (ambos > 0) o ninguno (ambos == 0).
+        - Valores negativos están prohibidos.
+        - Si Ti/Hi están configurados, deben definirse case_uom_id y pallet_uom_id.
+        - Ti × Hi debe reconciliar con cases_per_pallet derivado de Odoo UOM.
+        """
+        for profile in self:
+            ti = profile.cases_per_layer
+            hi = profile.layers_per_pallet
+
+            # Valores negativos
+            if ti < 0 or hi < 0:
+                raise ValidationError(_(
+                    "Los valores de Ti (cajas por capa) y Hi (capas por pallet) "
+                    "no pueden ser negativos.",
+                ))
+
+            # No configurado (0, 0) es válido
+            if ti == 0 and hi == 0:
+                continue
+
+            # Configuración parcial no permitida
+            if ti == 0 or hi == 0:
+                raise ValidationError(_(
+                    "La configuración Ti-Hi es incompleta. Ti y Hi deben "
+                    "configurarse juntos o permanecer ambos en 0.",
+                ))
+
+            # Ti > 0 y Hi > 0 requiere case_uom_id y pallet_uom_id
+            if not profile.case_uom_id or not profile.pallet_uom_id:
+                raise ValidationError(_(
+                    "Para configurar Ti-Hi es obligatorio definir tanto la "
+                    "UOM de case como la UOM de pallet.",
+                ))
+
+            # Reconciliación Ti × Hi == cases_per_pallet
+            expected_cases = float(ti * hi)
+            derived_cases = profile.pallet_uom_id._compute_quantity(
+                1.0, profile.case_uom_id, round=False,
+            )
+            if float_compare(expected_cases, derived_cases, precision_digits=4) != 0:
+                raise ValidationError(_(
+                    "Inconsistencia en Ti-Hi para '%(product)s': "
+                    "Ti (%(ti)d) × Hi (%(hi)d) = %(expected)d cajas por pallet, "
+                    "pero la UOM de pallet '%(pallet)s' equivale a %(derived).2f "
+                    "cajas de '%(case)s'.",
+                    product=profile.product_tmpl_id.display_name,
+                    ti=ti,
+                    hi=hi,
+                    expected=int(expected_cases),
+                    pallet=profile.pallet_uom_id.name,
+                    derived=derived_cases,
+                    case=profile.case_uom_id.name,
+                ))

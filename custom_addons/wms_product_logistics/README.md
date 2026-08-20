@@ -18,7 +18,7 @@ It defines the operational and logistical characteristics of products required b
 - Domain strategy profiles (Storage, Putaway, Replenishment, Allocation).
 - Quality inspection triggers and sampling rules.
 
-> **Current Status**: **PLM-003A — Operational UOM Roles**. Roles UOM operacionales (pick, case, pallet) implementados sobre `wms.product.logistics`.
+> **Current Status**: **PLM-003B — Ti-Hi Configuration & Derived Quantities**. Configuración geométrica Ti-Hi y cantidades derivadas de UOM implementadas sobre `wms.product.logistics`.
 
 ---
 
@@ -58,18 +58,21 @@ product.template (Odoo) ◄─── (1:0..1) ───► wms.product.logistics
 - Constraint server-side valida pertenencia al producto.
 - Reasignar product_tmpl_id revalida UOM seleccionadas.
 
+**Campos funcionales (PLM-003B):**
+- `cases_per_layer` → Integer (Ti, WMS-owned configuration).
+- `layers_per_pallet` → Integer (Hi, WMS-owned configuration).
+- `base_qty_per_case` → Float, compute, readonly, non-stored (derived from Odoo UOM).
+- `cases_per_pallet` → Float, compute, readonly, non-stored (derived from Odoo UOM).
+- `base_qty_per_pallet` → Float, compute, readonly, non-stored (derived from Odoo UOM).
+- Constraint server-side valida consistencia Ti-Hi: `Ti × Hi == cases_per_pallet`.
+
 - **Odoo 19 Reutilization**: Reutiliza `product.template.uom_id` (base) y `product.template.uom_ids` (packagings como Many2many `uom.uom`). `product.uom` es la asociación variante+UOM+barcode, no se usa como FK del perfil.
 
 > [!NOTE]
-> **Odoo 19 Packaging / UOM — Decisión implementada (PLM-003A)**:
-> La revisión del pinned Odoo 19 source (`95f76213d3f...`) confirmó que
-> `product.packaging` no existe en este pin. Odoo 19 usa:
-> - `product.template.uom_id` → UOM base (required)
-> - `product.template.uom_ids` → Many2many `uom.uom` (packagings adicionales)
-> - `product.uom` → asociación variante + UOM + barcode
->
-> Los roles UOM operacionales apuntan directamente a `uom.uom`.
-> **Ti-Hi y cantidades derivadas quedan diferidas a PLM-003B.**
+> **Odoo UOM como fuente de verdad cuantitativa (PLM-003B)**:
+> Odoo `uom.uom` es la fuente de verdad cuantitativa; Ti-Hi sólo añade geometría física WMS.
+> Las cantidades por caja y por pallet no se duplican ni se almacenan de forma independiente;
+> se derivan dinámicamente mediante los factores de conversión y `_compute_quantity()` de `uom.uom`.
 
 ---
 
@@ -81,8 +84,8 @@ All items below represent future development stages:
 |---|---|---|
 | **PLM-001** | Module Scaffold & Baseline (`wms_core`, `product`) | ✅ Merged |
 | **PLM-002** | Core Identity & One-to-One Link (`wms.product.logistics ↔ product.template`) | ✅ Merged |
-| **PLM-003A** | Operational UOM Roles (`pick_uom_id`, `case_uom_id`, `pallet_uom_id`) | ✅ Current |
-| **PLM-003B** | Ti-Hi Configuration & Derived Quantities | ⏳ Future |
+| **PLM-003A** | Operational UOM Roles (`pick_uom_id`, `case_uom_id`, `pallet_uom_id`) | ✅ Merged |
+| **PLM-003B** | Ti-Hi Configuration & Derived Quantities | ✅ Current |
 | **PLM-004** | Classifications & Handling Attributes (ABC, Velocity, Temp, Hazmat, Stack) | ⏳ Future |
 | **PLM-005** | Shelf Life Controls & HU Restrictions | ⏳ Future |
 | **PLM-006** | Strategy Profiles & Quality Configuration | ⏳ Future |

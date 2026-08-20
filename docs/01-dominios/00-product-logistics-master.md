@@ -90,16 +90,27 @@ wms.product.logistics:
 ```
 
 La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin modificación.
-Las cantidades (Ti-Hi) quedan diferidas a PLM-003B.
 
-### Configuración de Pallet (Ti-Hi)
+### Configuración de Pallet (Ti-Hi) y Cantidades Derivadas (PLM-003B)
 
-| Campo | En inglés | Significado | Ejemplo |
-|---|---|---|---|
-| `units_per_case` | Units per Case | Unidades por caja | 12 |
-| `cases_per_layer` | Cases per Layer (Ti) | Cajas por capa del pallet | 8 |
-| `layers_per_pallet` | Layers per Pallet (Hi) | Capas por pallet | 6 |
-| `units_per_pallet` | Units per Pallet | Computed: units × cases × layers | 576 |
+> **Principio de Diseño:** Odoo `uom.uom` mantiene la verdad cuantitativa del packaging (mediante factores de conversión y `_compute_quantity()`). El WMS sólo almacena la geometría física Ti/Hi y deriva las cantidades en tiempo real (non-stored, readonly).
+
+#### Configuración WMS (Persistente)
+
+| Campo | En inglés | Significado | Tipo | Ejemplo |
+|---|---|---|---|---|
+| `cases_per_layer` | Cases per Layer (Ti) | Cajas por capa del pallet (Ti) | `Integer` | 8 |
+| `layers_per_pallet` | Layers per Pallet (Hi) | Capas por pallet (Hi) | `Integer` | 6 |
+
+#### Cantidades Derivadas de Odoo UOM (Compute, Non-Stored, Readonly)
+
+| Campo | En inglés | Significado | Derivación | Ejemplo |
+|---|---|---|---|---|
+| `base_qty_per_case` | Base Qty per Case | Unidades base por caja | `case_uom_id → uom_id` | 12.0 |
+| `cases_per_pallet` | Cases per Pallet | Cajas por pallet | `pallet_uom_id → case_uom_id` | 48.0 |
+| `base_qty_per_pallet` | Base Qty per Pallet | Unidades base por pallet | `pallet_uom_id → uom_id` | 576.0 |
+
+> **Invariante de Reconciliación:** Si Ti y Hi están configurados (> 0), se valida server-side que `Ti × Hi == cases_per_pallet`.
 
 ### Dimensiones Logísticas
 
