@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        PLM-002: Record rule multi-company para wms.product.logistics.
+        Incluye productos globales (company_id=False) mediante
+        parent_of + OR.
+    -->
+
+    <record id="wms_product_logistics_company_rule" model="ir.rule">
+        <field name="name">WMS Product Logistics: multi-company isolation</field>
+        <field name="model_id" ref="model_wms_product_logistics"/>
+        <field name="global" eval="True"/>
+        <field name="domain_force">[
+            '|',
+            ('company_id', 'parent_of', company_ids),
+            ('company_id', '=', False),
+        ]</field>
+    </record>
+
+</odoo>
