@@ -19,7 +19,7 @@
 → Detalle completo en [01-dominios/02-inventory.md](../01-dominios/02-inventory.md)
 
 ### Fase 5.5 — Product Logistics Master (v1.2)
-**Perfil logístico WMS por producto** (ADR-024). Packaging operacionales (pick, case, pallet), configuración Ti-Hi, clasificaciones ABC/velocity, clases de temperatura/hazmat, restricciones de HU, perfiles de storage/putaway/allocation/replenishment.
+**Perfil logístico WMS por producto** (ADR-024). Packaging operacionales (pick, case, pallet), configuración Ti-Hi, clasificaciones ABC/velocity, clases de temperatura/hazmat, vida útil (shelf-life), restricciones de HU y política de inspección de calidad como inputs maestros. Los strategy profile bindings y reglas dinámicas se enlazan en las fases de sus respectivos motores y el Typed Policy Engine.
 
 → Detalle completo en [01-dominios/00-product-logistics-master.md](../01-dominios/00-product-logistics-master.md)
 

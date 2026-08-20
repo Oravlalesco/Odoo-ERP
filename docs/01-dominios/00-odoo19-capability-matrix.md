@@ -233,7 +233,9 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | Cantidades derivadas de packaging | ✅ Reutilizar | Derivadas de Odoo `uom.uom` (`base_qty_per_case`, `cases_per_pallet`, `base_qty_per_pallet`). PLM-003B. |
 | Política de vida útil (receipt days, shipping days) | 🆕 Crear WMS | Mínimos de vida útil restante (`min_shelf_life_receipt_days`, `min_shelf_life_shipping_days`). PLM-005A. |
 | Restricciones de tipos HU (allowed_hu_type_ids, default_hu_type_id) | 🔧 Extender | Reutiliza `stock.package.type` vía `wms.product.logistics`. PLM-005B. |
-| Storage/putaway/replenishment/allocation profiles | 🆕 Crear WMS | Perfiles WMS |
+| Política de inspección de calidad (requires, type, rate) | 🆕 Crear WMS | Metadatos maestros en `wms.product.logistics`. PLM-006A. |
+| Ejecución de calidad en recepción (inspections, results, checks) | 🆕 Crear WMS | Diferido a dominios Inbound / Quality Engine / Rule Engine. |
+| Storage/putaway/replenishment/allocation profiles | ⏸ Diferido | PLM-006B: diferido hasta existencia de entidades de dominio reales y Typed Policy Engine. |
 
 ---
 

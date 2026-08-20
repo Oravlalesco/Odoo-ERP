@@ -18,7 +18,7 @@ It defines the operational and logistical characteristics of products required b
 - Domain strategy profiles (Storage, Putaway, Replenishment, Allocation).
 - Quality inspection triggers and sampling rules.
 
-> **Current Status**: **PLM-005B — HU Type Restrictions**. Restricciones de tipos de unidades de manejo (`allowed_hu_type_ids`, `default_hu_type_id`) implementadas sobre `wms.product.logistics`.
+> **Current Status**: **PLM-006A — Quality Inspection Policy Master**. Política maestra de inspección de calidad (`requires_quality_inspection`, `quality_inspection_type`, `quality_sampling_rate`) implementada sobre `wms.product.logistics`. Strategy profile bindings diferidos a PLM-006B.
 
 ---
 
@@ -91,10 +91,20 @@ product.template (Odoo) ◄─── (1:0..1) ───► wms.product.logistics
   - Perfil de producto global (`company_id=False`): sólo admite tipos globales (`company_id=False`).
 - Reasignación de producto (`product_tmpl_id`) revalida toda la configuración HU.
 
+**Campos funcionales (PLM-006A):**
+- `requires_quality_inspection` → Boolean (requerimiento maestro de inspección al recibir).
+  - `False` no impide inspecciones decididas dinámicamente por reglas de recepción futuras.
+- `quality_inspection_type` → Selection (`VISUAL`, `DIMENSIONAL`, `SAMPLING`), optional, no default.
+  - Clasificación/preferencia maestra de inspección.
+- `quality_sampling_rate` → Float (porcentaje de muestreo preferido, 0 a 100).
+  - Protegido por DB CHECK `quality_sampling_rate >= 0 AND quality_sampling_rate <= 100`.
+  - `0.0` indica sin porcentaje de override estático en el maestro de producto.
+- Los 3 campos son deliberadamente independientes (sin constraints artificiales de combinación).
+
 - **Odoo 19 Reutilization**:
   - `stock.package` = Instancia física del HU.
   - `stock.package.type` = Catálogo oficial de tipos (dimensiones, peso tara/máximo, `package_use`).
-  - `wms.product.logistics` = Perfil de política WMS (allowed y default HU types únicamente).
+  - `wms.product.logistics` = Perfil de política WMS (allowed y default HU types, y política de calidad únicamente).
 
 > [!NOTE]
 > **Odoo UOM como fuente de verdad cuantitativa (PLM-003B)**:
@@ -116,8 +126,9 @@ All items below represent future development stages:
 | **PLM-003B** | Ti-Hi Configuration & Derived Quantities | ✅ Merged |
 | **PLM-004** | Classifications & Handling Attributes (ABC, Velocity, Temp, Hazmat, Stack) | ✅ Merged |
 | **PLM-005A** | Shelf-Life Policy Master (`min_shelf_life_receipt_days`, `shipping_days`) | ✅ Merged |
-| **PLM-005B** | HU Type Restrictions (`allowed_hu_type_ids`, `default_hu_type_id`) | ✅ Current |
-| **PLM-006** | Strategy Profiles & Quality Configuration | ⏳ Future |
+| **PLM-005B** | HU Type Restrictions (`allowed_hu_type_ids`, `default_hu_type_id`) | ✅ Merged |
+| **PLM-006A** | Quality Inspection Policy Master (`requires_quality_inspection`, `type`, `rate`) | ✅ Current |
+| **PLM-006B** | Strategy Profile Bindings (`storage`, `putaway`, `replenishment`, `allocation`) | ⏸ Deferred |
 | **PLM-007** | Product Logistics UI & Views | ⏳ Future |
 
 ---
