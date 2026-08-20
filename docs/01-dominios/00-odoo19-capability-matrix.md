@@ -225,8 +225,9 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | `categ_id` | ✅ Reutilizar | Categoría |
 | `barcode` | ✅ Reutilizar | Código de barras |
 | WMS Logistics Profile | 🆕 Crear WMS | Ver [Product Logistics Master](00-product-logistics-master.md) |
-| ABC class, velocity class | 🆕 Crear WMS | Clasificación de rotación |
-| Temperature class, hazmat class | 🆕 Crear WMS | Clases operacionales |
+| ABC class, velocity class | 🆕 Crear WMS | Clasificación de rotación (`abc_class`, `velocity_class`). PLM-004. |
+| Temperature class, hazmat class | 🆕 Crear WMS | Clases operacionales (`temperature_class`, `hazmat_class`). PLM-004. |
+| Atributos de manejo (stackable, max_stack, fragile) | 🆕 Crear WMS | Atributos físicos WMS (`stackable`, `max_stack`, `fragile`). PLM-004. |
 | Pick UOM, case UOM, pallet UOM | 🔧 Extender | Vía `uom.uom` + `wms.product.logistics` (`pick_uom_id`, `case_uom_id`, `pallet_uom_id`). PLM-003A. |
 | Ti-Hi (cases per layer, layers per pallet) | 🆕 Crear WMS | Configuración física WMS (`cases_per_layer`, `layers_per_pallet`). PLM-003B. |
 | Cantidades derivadas de packaging | ✅ Reutilizar | Derivadas de Odoo `uom.uom` (`base_qty_per_case`, `cases_per_pallet`, `base_qty_per_pallet`). PLM-003B. |

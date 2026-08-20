@@ -18,7 +18,7 @@ It defines the operational and logistical characteristics of products required b
 - Domain strategy profiles (Storage, Putaway, Replenishment, Allocation).
 - Quality inspection triggers and sampling rules.
 
-> **Current Status**: **PLM-003B — Ti-Hi Configuration & Derived Quantities**. Configuración geométrica Ti-Hi y cantidades derivadas de UOM implementadas sobre `wms.product.logistics`.
+> **Current Status**: **PLM-004 — Classifications & Handling Attributes**. Clasificaciones operacionales (ABC, velocidad, temperatura, hazmat) y atributos de manejo físico (stackable, max_stack, fragile) implementados sobre `wms.product.logistics`.
 
 ---
 
@@ -66,6 +66,16 @@ product.template (Odoo) ◄─── (1:0..1) ───► wms.product.logistics
 - `base_qty_per_pallet` → Float, compute, readonly, non-stored (derived from Odoo UOM).
 - Constraint server-side valida consistencia Ti-Hi: `Ti × Hi == cases_per_pallet`.
 
+**Campos funcionales (PLM-004):**
+- `abc_class` → Selection (A, B, C), optional, no default.
+- `velocity_class` → Selection (FAST, MEDIUM, SLOW, DEAD), optional, no default.
+- `temperature_class` → Selection (AMBIENT, CHILLED, FROZEN, ULTRA_FROZEN), optional, no default.
+- `hazmat_class` → Selection (NONE, CLASS_1..CLASS_9), optional, no default.
+- `stackable` → Boolean (apilable físicamente).
+- `max_stack` → Integer (niveles máximos de apilado, >= 0 via DB CHECK).
+- `fragile` → Boolean (manipulación frágil, independiente de stackable).
+- Constraint server-side valida coherencia stackable ↔ max_stack (`False → 0`, `True → >= 2`).
+
 - **Odoo 19 Reutilization**: Reutiliza `product.template.uom_id` (base) y `product.template.uom_ids` (packagings como Many2many `uom.uom`). `product.uom` es la asociación variante+UOM+barcode, no se usa como FK del perfil.
 
 > [!NOTE]
@@ -85,8 +95,8 @@ All items below represent future development stages:
 | **PLM-001** | Module Scaffold & Baseline (`wms_core`, `product`) | ✅ Merged |
 | **PLM-002** | Core Identity & One-to-One Link (`wms.product.logistics ↔ product.template`) | ✅ Merged |
 | **PLM-003A** | Operational UOM Roles (`pick_uom_id`, `case_uom_id`, `pallet_uom_id`) | ✅ Merged |
-| **PLM-003B** | Ti-Hi Configuration & Derived Quantities | ✅ Current |
-| **PLM-004** | Classifications & Handling Attributes (ABC, Velocity, Temp, Hazmat, Stack) | ⏳ Future |
+| **PLM-003B** | Ti-Hi Configuration & Derived Quantities | ✅ Merged |
+| **PLM-004** | Classifications & Handling Attributes (ABC, Velocity, Temp, Hazmat, Stack) | ✅ Current |
 | **PLM-005** | Shelf Life Controls & HU Restrictions | ⏳ Future |
 | **PLM-006** | Strategy Profiles & Quality Configuration | ⏳ Future |
 | **PLM-007** | Product Logistics UI & Views | ⏳ Future |

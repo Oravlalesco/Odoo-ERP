@@ -112,26 +112,37 @@ La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin mo
 
 > **Invariante de Reconciliación:** Si Ti y Hi están configurados (> 0), se valida server-side que `Ti × Hi == cases_per_pallet`.
 
-### Dimensiones Logísticas
+### Clasificaciones Operacionales (PLM-004)
 
-| Campo | En inglés | Significado |
-|---|---|---|
-| `case_length`, `case_width`, `case_height` | Case Dimensions | Dimensiones de la caja |
-| `case_weight` | Case Weight | Peso de la caja |
-| `pallet_length`, `pallet_width`, `pallet_height` | Pallet Dimensions | Dimensiones del pallet armado |
-| `pallet_weight` | Pallet Weight | Peso del pallet armado |
-| `stackable` | Stackable | ¿Se puede apilar? |
-| `max_stack` | Max Stack | Máximo de niveles de apilado |
-| `fragile` | Fragile | ¿Es frágil? |
+> Atributos maestros explícitos para motores WMS (Putaway, Allocation, Slotting). Son opcionales y sin derivación automática.
 
-### Clasificaciones Operacionales
+| Campo | En inglés | Significado | Tipo | Valores / Catálogo |
+|---|---|---|---|---|
+| `abc_class` | ABC Class | Clasificación por valor/rotación | `Selection` | `A`, `B`, `C` |
+| `velocity_class` | Velocity Class | Velocidad de movimiento | `Selection` | `FAST`, `MEDIUM`, `SLOW`, `DEAD` |
+| `temperature_class` | Temperature Class | Requisito de temperatura | `Selection` | `AMBIENT`, `CHILLED`, `FROZEN`, `ULTRA_FROZEN` |
+| `hazmat_class` | Hazardous Material Class | Clase de material peligroso | `Selection` | `NONE`, `CLASS_1` a `CLASS_9` |
 
-| Campo | En inglés | Significado | Valores |
+### Atributos de Manejo / Handling (PLM-004)
+
+> Reglas de apilabilidad y fragilidad física para almacenamiento y transporte.
+
+| Campo | En inglés | Significado | Tipo | Reglas / Invariantes |
+|---|---|---|---|---|
+| `stackable` | Stackable | ¿Es físicamente apilable? | `Boolean` | `False` requiere `max_stack=0`; `True` requiere `max_stack>=2` |
+| `max_stack` | Max Stack | Máximo número de niveles de apilado | `Integer` | `max_stack >= 0` protegido por DB CHECK |
+| `fragile` | Fragile | ¿Requiere manipulación como frágil? | `Boolean` | Independiente de `stackable` |
+
+### Dimensiones y Pesos Físicos (Diferido a etapa posterior)
+
+> Las dimensiones y pesos logísticos de caja y pallet armado quedan diferidos para su implementación dedicada.
+
+| Campo | En inglés | Significado | Estado |
 |---|---|---|---|
-| `abc_class` | ABC Class | Clasificación por valor/rotación | `A`, `B`, `C` |
-| `velocity_class` | Velocity Class | Velocidad de movimiento | `FAST`, `MEDIUM`, `SLOW`, `DEAD` |
-| `temperature_class` | Temperature Class | Requisito de temperatura | `AMBIENT`, `CHILLED`, `FROZEN`, `ULTRA_FROZEN` |
-| `hazmat_class` | Hazardous Material Class | Clase de material peligroso | `NONE`, `CLASS_1` a `CLASS_9` |
+| `case_length`, `case_width`, `case_height` | Case Dimensions | Dimensiones de la caja | ⏳ Diferido |
+| `case_weight` | Case Weight | Peso de la caja | ⏳ Diferido |
+| `pallet_length`, `pallet_width`, `pallet_height` | Pallet Dimensions | Dimensiones del pallet armado | ⏳ Diferido |
+| `pallet_weight` | Pallet Weight | Peso del pallet armado | ⏳ Diferido |
 
 ### Control de Vida Útil
 

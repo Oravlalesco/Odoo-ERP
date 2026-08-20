@@ -31,6 +31,15 @@ class WmsProductLogistics(models.Model):
         cases_per_pallet    → Cajas por pallet (derived Odoo UOM)
         base_qty_per_pallet → Cantidad base por pallet (derived Odoo UOM)
 
+    Campos funcionales (PLM-004):
+        abc_class           → Selección ABC (A, B, C)
+        velocity_class      → Selección velocidad (FAST, MEDIUM, SLOW, DEAD)
+        temperature_class   → Selección temperatura (AMBIENT, CHILLED, FROZEN, ULTRA_FROZEN)
+        hazmat_class        → Selección hazmat (NONE, CLASS_1..CLASS_9)
+        stackable           → Boolean apilable
+        max_stack           → Integer niveles máximos de apilado (>= 0)
+        fragile             → Boolean producto frágil
+
     Lifecycle:
         - Crear producto no crea perfil
         - Archivar producto → perfil queda active=False
@@ -129,6 +138,69 @@ class WmsProductLogistics(models.Model):
         help="Cantidad de unidades base por pallet, derivada de la UOM de pallet.",
     )
 
+    # ------------------------------------------------------------------
+    # PLM-004: Operational Classifications & Handling Attributes
+    # ------------------------------------------------------------------
+
+    abc_class = fields.Selection(
+        selection=[
+            ("A", "Clase A"),
+            ("B", "Clase B"),
+            ("C", "Clase C"),
+        ],
+        string="Clase ABC",
+        help="Clasificación ABC por valor o rotación.",
+    )
+    velocity_class = fields.Selection(
+        selection=[
+            ("FAST", "Rápido (Fast)"),
+            ("MEDIUM", "Medio (Medium)"),
+            ("SLOW", "Lento (Slow)"),
+            ("DEAD", "Sin movimiento (Dead)"),
+        ],
+        string="Clase de Velocidad",
+        help="Clasificación por velocidad de movimiento.",
+    )
+    temperature_class = fields.Selection(
+        selection=[
+            ("AMBIENT", "Ambiente (Ambient)"),
+            ("CHILLED", "Refrigerado (Chilled)"),
+            ("FROZEN", "Congelado (Frozen)"),
+            ("ULTRA_FROZEN", "Ultra-congelado (Ultra Frozen)"),
+        ],
+        string="Clase de Temperatura",
+        help="Requisito de control de temperatura.",
+    )
+    hazmat_class = fields.Selection(
+        selection=[
+            ("NONE", "No peligroso (None)"),
+            ("CLASS_1", "Clase 1 - Explosivos"),
+            ("CLASS_2", "Clase 2 - Gases"),
+            ("CLASS_3", "Clase 3 - Líquidos inflamables"),
+            ("CLASS_4", "Clase 4 - Sólidos inflamables"),
+            ("CLASS_5", "Clase 5 - Oxidantes"),
+            ("CLASS_6", "Clase 6 - Tóxicos"),
+            ("CLASS_7", "Clase 7 - Radiactivos"),
+            ("CLASS_8", "Clase 8 - Corrosivos"),
+            ("CLASS_9", "Clase 9 - Misceláneos"),
+        ],
+        string="Clase Hazmat",
+        help="Clasificación de material peligroso.",
+    )
+
+    stackable = fields.Boolean(
+        string="Apilable",
+        help="Indica si el producto o su packaging es físicamente apilable.",
+    )
+    max_stack = fields.Integer(
+        string="Máximo de apilado",
+        help="Número máximo de niveles de apilado permitidos.",
+    )
+    fragile = fields.Boolean(
+        string="Frágil",
+        help="Indica si el producto requiere manipulación especial como frágil.",
+    )
+
     @api.depends(
         "product_tmpl_id.uom_id",
         "product_tmpl_id.uom_id.factor",
@@ -175,6 +247,11 @@ class WmsProductLogistics(models.Model):
     _unique_product = models.Constraint(
         "UNIQUE(product_tmpl_id)",
         "Sólo puede existir un perfil logístico WMS por producto.",
+    )
+
+    _check_max_stack = models.Constraint(
+        "CHECK(max_stack >= 0)",
+        "El máximo de apilado no puede ser negativo.",
     )
 
     @api.constrains(
@@ -285,4 +362,21 @@ class WmsProductLogistics(models.Model):
                     pallet=profile.pallet_uom_id.name,
                     derived=derived_cases,
                     case=profile.case_uom_id.name,
+                ))
+
+    @api.constrains("stackable", "max_stack")
+    def _check_stackability(self):
+        """Validar coherencia entre stackable y max_stack.
+
+        - stackable = False  →  max_stack DEBE ser 0
+        - stackable = True   →  max_stack DEBE ser >= 2
+        """
+        for profile in self:
+            if not profile.stackable and profile.max_stack != 0:
+                raise ValidationError(_(
+                    "Si el producto no es apilable, el máximo de apilado debe ser 0.",
+                ))
+            if profile.stackable and profile.max_stack < 2:
+                raise ValidationError(_(
+                    "Si el producto es apilable, el máximo de apilado debe ser al menos 2 niveles.",
                 ))
