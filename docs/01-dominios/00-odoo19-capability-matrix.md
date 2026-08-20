@@ -231,6 +231,7 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | Pick UOM, case UOM, pallet UOM | 🔧 Extender | Vía `uom.uom` + `wms.product.logistics` (`pick_uom_id`, `case_uom_id`, `pallet_uom_id`). PLM-003A. |
 | Ti-Hi (cases per layer, layers per pallet) | 🆕 Crear WMS | Configuración física WMS (`cases_per_layer`, `layers_per_pallet`). PLM-003B. |
 | Cantidades derivadas de packaging | ✅ Reutilizar | Derivadas de Odoo `uom.uom` (`base_qty_per_case`, `cases_per_pallet`, `base_qty_per_pallet`). PLM-003B. |
+| Política de vida útil (receipt days, shipping days) | 🆕 Crear WMS | Mínimos de vida útil restante (`min_shelf_life_receipt_days`, `min_shelf_life_shipping_days`). PLM-005A. |
 | Storage/putaway/replenishment/allocation profiles | 🆕 Crear WMS | Perfiles WMS |
 
 ---

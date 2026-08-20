@@ -144,13 +144,19 @@ La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin mo
 | `pallet_length`, `pallet_width`, `pallet_height` | Pallet Dimensions | Dimensiones del pallet armado | ⏳ Diferido |
 | `pallet_weight` | Pallet Weight | Peso del pallet armado | ⏳ Diferido |
 
-### Control de Vida Útil
+### Control de Vida Útil / Shelf-Life Policy (PLM-005A)
 
-| Campo | En inglés | Significado | Ejemplo |
-|---|---|---|---|
-| `min_shelf_life_receipt` | Min Shelf Life at Receipt | Vida útil mínima para aceptar en recepción | 180 días |
-| `min_shelf_life_shipping` | Min Shelf Life at Shipping | Vida útil mínima al despachar al cliente | 90 días |
-| `shelf_life_uom` | Shelf Life UOM | Unidad de la vida útil | Días |
+> **Principio de Diseño:** Odoo conserva la verdad de las fechas de expiración (`stock.lot`: `expiration_date`, `use_date`, `removal_date`, `alert_date`). El WMS almacena únicamente los mínimos de vida restante requeridos expresados directamente en **días**. Un valor de `0` indica sin restricción mínima configurada.
+
+| Campo | En inglés | Significado | Tipo | Ejemplo |
+|---|---|---|---|---|
+| `min_shelf_life_receipt_days` | Min Shelf Life at Receipt (Days) | Vida útil mínima requerida al recibir en recepción | `Integer` | 180 días (0 = sin mínimo) |
+| `min_shelf_life_shipping_days` | Min Shelf Life at Shipping (Days) | Vida útil mínima requerida al despachar al cliente | `Integer` | 90 días (0 = sin mínimo) |
+
+> **Invariantes:**
+> - Ambos umbrales son independientes y no imponen orden relativo.
+> - Valores negativos están protegidos y rechazados por DB CHECK.
+> - No se duplican fechas de expiración en el perfil WMS; la validación de lotes se ejecuta en motores Inbound/Outbound correspondientes.
 
 ### Restricciones de HU
 

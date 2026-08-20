@@ -40,6 +40,10 @@ class WmsProductLogistics(models.Model):
         max_stack           → Integer niveles máximos de apilado (>= 0)
         fragile             → Boolean producto frágil
 
+    Campos funcionales (PLM-005A):
+        min_shelf_life_receipt_days  → Días mínimos vida útil al recibir (>= 0)
+        min_shelf_life_shipping_days → Días mínimos vida útil al despachar (>= 0)
+
     Lifecycle:
         - Crear producto no crea perfil
         - Archivar producto → perfil queda active=False
@@ -201,6 +205,21 @@ class WmsProductLogistics(models.Model):
         help="Indica si el producto requiere manipulación especial como frágil.",
     )
 
+    # ------------------------------------------------------------------
+    # PLM-005A: Shelf-Life Policy Master
+    # ------------------------------------------------------------------
+
+    min_shelf_life_receipt_days = fields.Integer(
+        string="Vida útil mínima al recibir (días)",
+        help="Días mínimos de vida útil restante requeridos al recibir en recepción. "
+        "0 indica sin requisito.",
+    )
+    min_shelf_life_shipping_days = fields.Integer(
+        string="Vida útil mínima al despachar (días)",
+        help="Días mínimos de vida útil restante requeridos al despachar. "
+        "0 indica sin requisito.",
+    )
+
     @api.depends(
         "product_tmpl_id.uom_id",
         "product_tmpl_id.uom_id.factor",
@@ -252,6 +271,16 @@ class WmsProductLogistics(models.Model):
     _check_max_stack = models.Constraint(
         "CHECK(max_stack >= 0)",
         "El máximo de apilado no puede ser negativo.",
+    )
+
+    _check_min_shelf_life_receipt = models.Constraint(
+        "CHECK(min_shelf_life_receipt_days >= 0)",
+        "La vida útil mínima al recibir no puede ser negativa.",
+    )
+
+    _check_min_shelf_life_shipping = models.Constraint(
+        "CHECK(min_shelf_life_shipping_days >= 0)",
+        "La vida útil mínima al despachar no puede ser negativa.",
     )
 
     @api.constrains(
