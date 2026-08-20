@@ -177,22 +177,24 @@ La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin mo
 > - Perfil con producto global (`company_id=False`): sólo acepta tipos globales (`company_id=False`).
 > - Reasignar `product_tmpl_id` revalida toda la configuración HU server-side.
 
-### Perfiles WMS
+### Política de Inspección de Calidad (PLM-006A)
 
-| Campo | En inglés | Significado |
-|---|---|---|
-| `storage_profile` | Storage Profile | Perfil de almacenamiento (linked to putaway rules) |
-| `putaway_profile` | Putaway Profile | Perfil de putaway (zona preferida, tipo de rack, etc.) |
-| `replenishment_profile` | Replenishment Profile | Perfil de reposición (min/max de pick face) |
-| `allocation_profile` | Allocation Profile | Perfil de asignación (FIFO/FEFO/estrategia preferida) |
+> **Principio de Diseño:** `wms.product.logistics` almacena la política y metadatos maestros del producto para control de calidad en recepción. La ejecución de inspecciones, generación de trabajos de calidad, estados operativos de calidad y reglas dinámicas (por proveedor, categoría, riesgo) pertenecen a dominios posteriores (Inbound / Quality Engine / Rule Engine).
 
-### Inspección
+| Campo | En inglés | Significado | Tipo | Reglas / Invariantes |
+|---|---|---|---|---|
+| `requires_quality_inspection` | Requires Quality Inspection | Requerimiento maestro de inspección al recibir | `Boolean` | `False` no impide inspecciones decididas por reglas dinámicas |
+| `quality_inspection_type` | Quality Inspection Type | Tipo preferido de inspección | `Selection` | `VISUAL`, `DIMENSIONAL`, `SAMPLING` (opcional) |
+| `quality_sampling_rate` | Quality Sampling Rate | Porcentaje de muestreo preferido | `Float` | `0.0` a `100.0` (protegido por DB CHECK; 0 = sin override estático) |
 
-| Campo | En inglés | Significado |
-|---|---|---|
-| `requires_quality_inspection` | Requires Quality Inspection | ¿Requiere inspección al recibir? |
-| `quality_inspection_type` | Quality Inspection Type | Tipo de inspección: visual, dimensional, muestreo |
-| `quality_sampling_rate` | Quality Sampling Rate | Porcentaje de muestreo |
+> **Invariantes:**
+> - Los 3 campos son deliberadamente independientes (no se restringen combinaciones a nivel Python).
+> - No se crea modelo ni lógica de ejecución de calidad en Product Logistics.
+> - No se agrega `quality_status` a `stock.quant` (alineado con ADR-011/012).
+
+### Perfiles de Estrategia WMS (PLM-006B — Diferido)
+
+> **Decisión Arquitectónica:** Los enlaces a perfiles de estrategia (`storage_profile`, `putaway_profile`, `replenishment_profile`, `allocation_profile`) quedan formalmente diferidos a **PLM-006B (Deferred)**. No se persisten campos ni modelos placeholder hasta que existan las entidades reales de sus respectivos dominios (ej. `wms.putaway.strategy`, `wms.replenishment.rule`) y el Typed Policy Engine (ADR-009/ADR-018).
 
 ---
 

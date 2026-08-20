@@ -48,6 +48,11 @@ class WmsProductLogistics(models.Model):
         allowed_hu_type_ids → Tipos HU permitidos (Many2many stock.package.type)
         default_hu_type_id  → Tipo HU por defecto (Many2one stock.package.type, ondelete='restrict')
 
+    Campos funcionales (PLM-006A):
+        requires_quality_inspection → Boolean (requerimiento maestro de inspección)
+        quality_inspection_type     → Selection (VISUAL, DIMENSIONAL, SAMPLING)
+        quality_sampling_rate       → Float (porcentaje de muestreo, 0..100)
+
     Lifecycle:
         - Crear producto no crea perfil
         - Archivar producto → perfil queda active=False
@@ -242,6 +247,30 @@ class WmsProductLogistics(models.Model):
         "Si se especifican tipos permitidos, debe pertenecer a dicha lista.",
     )
 
+    # ------------------------------------------------------------------
+    # PLM-006A: Quality Inspection Policy Master
+    # ------------------------------------------------------------------
+
+    requires_quality_inspection = fields.Boolean(
+        string="Requiere inspección de calidad",
+        help="Indica si el producto declara un requerimiento maestro de inspección al recibir. "
+        "False no impide inspecciones determinadas dinámicamente por reglas de recepción.",
+    )
+    quality_inspection_type = fields.Selection(
+        selection=[
+            ("VISUAL", "Visual"),
+            ("DIMENSIONAL", "Dimensional"),
+            ("SAMPLING", "Muestreo"),
+        ],
+        string="Tipo de inspección de calidad",
+        help="Tipo de inspección preferido o configurado para el producto.",
+    )
+    quality_sampling_rate = fields.Float(
+        string="Porcentaje de muestreo de calidad (%)",
+        help="Porcentaje de muestreo preferido para inspección (0 a 100). "
+        "0 indica sin porcentaje maestro predefinido.",
+    )
+
     @api.depends(
         "product_tmpl_id.uom_id",
         "product_tmpl_id.uom_id.factor",
@@ -303,6 +332,11 @@ class WmsProductLogistics(models.Model):
     _check_min_shelf_life_shipping = models.Constraint(
         "CHECK(min_shelf_life_shipping_days >= 0)",
         "La vida útil mínima al despachar no puede ser negativa.",
+    )
+
+    _check_quality_sampling_rate = models.Constraint(
+        "CHECK(quality_sampling_rate >= 0 AND quality_sampling_rate <= 100)",
+        "El porcentaje de muestreo de calidad debe estar entre 0 y 100.",
     )
 
     @api.constrains(
