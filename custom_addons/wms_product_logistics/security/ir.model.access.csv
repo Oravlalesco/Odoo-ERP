@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_wms_product_logistics_operator,wms.product.logistics operator,model_wms_product_logistics,wms_core.group_wms_operator,1,0,0,0
+access_wms_product_logistics_manager,wms.product.logistics manager,model_wms_product_logistics,wms_core.group_wms_manager,1,1,1,1
+access_wms_product_logistics_system,wms.product.logistics system admin,model_wms_product_logistics,base.group_system,1,1,1,1

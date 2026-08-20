@@ -25,7 +25,10 @@ product.template se introducirán en PLM-002.
         "wms_core",
         "product",
     ],
-    "data": [],
+    "data": [
+        "security/wms_product_logistics_security.xml",
+        "security/ir.model.access.csv",
+    ],
     "installable": True,
     "application": False,
     "auto_install": False,

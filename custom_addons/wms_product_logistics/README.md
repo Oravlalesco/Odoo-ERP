@@ -18,26 +18,45 @@ It defines the operational and logistical characteristics of products required b
 - Domain strategy profiles (Storage, Putaway, Replenishment, Allocation).
 - Quality inspection triggers and sampling rules.
 
-> **Current Status**: **PLM-001 Pure Scaffold**. No business models, views, security, or operational logic are implemented in this step.
+> **Current Status**: **PLM-002 — Core Identity & One-to-One Link**. El modelo `wms.product.logistics` está implementado como companion 1:1 de `product.template`.
 
 ---
 
 ## Architecture & Boundaries (ADR-024)
 
-### One-to-One Model: `wms.product.logistics` *(FUTURE / NOT IMPLEMENTED IN PLM-001)*
+### One-to-One Model: `wms.product.logistics`
 
-Rather than polluting Odoo's core `product.template` with dozens of WMS-specific fields, this domain introduces a dedicated companion model:
+Companion 1:1 de `product.template`:
 
 ```text
-product.template (Odoo) ◄─── (1:1) ───► wms.product.logistics (WMS)
+product.template (Odoo) ◄─── (1:0..1) ───► wms.product.logistics (WMS)
 ```
 
-- **Odoo 19 Reutilization**: Reutiliza el maestro de productos de Odoo 19 (`product.template`, `product.product`). La representación operacional de UOM/packaging será verificada contra el pinned Odoo 19 y congelada antes de PLM-002.
+**Campos funcionales (PLM-002):**
+- `product_tmpl_id` → product.template, required, index, cascade
+- `company_id` → related de product_tmpl_id.company_id, store, readonly, puede ser False
+- `active` → related de product_tmpl_id.active, store, readonly
+- UNIQUE(product_tmpl_id)
+- rec_name basado en product_tmpl_id
+
+**Lifecycle:**
+- Crear producto NO crea perfil automáticamente
+- Archivar producto → perfil queda active=False
+- Reactivar producto → perfil vuelve a active=True
+- Eliminar producto → perfil eliminado (cascade)
+- Eliminar perfil → producto permanece
+
+**Seguridad:**
+- Operator / Supervisor: sólo lectura
+- Manager / System Admin: CRUD completo
+- Record rule: `parent_of` + global products (company_id=False)
+
+- **Odoo 19 Reutilization**: Reutiliza el maestro de productos de Odoo 19 (`product.template`, `product.product`). La representación operacional de UOM/packaging será verificada contra el pinned Odoo 19 y congelada antes de PLM-003.
 - **WMS Scope**: Perfil logístico WMS (`wms.product.logistics`), cálculos Ti-Hi, umbrales de vida útil, clasificaciones de temperatura/hazmat y perfiles de política WMS.
 
 > [!NOTE]
 > **Odoo 19 Packaging / UOM Representation**:
-> Odoo 19 source verification is pending for the final packaging/UOM mapping before PLM-002. The operational packaging/UOM representation will be verified and frozen prior to implementing `wms.product.logistics`.
+> Odoo 19 source verification is pending for the final packaging/UOM mapping before PLM-003. The operational packaging/UOM representation will be verified and frozen prior to extending `wms.product.logistics` with packaging fields.
 
 ---
 
@@ -47,8 +66,8 @@ All items below represent future development stages:
 
 | Task | Capability | Status |
 |---|---|---|
-| **PLM-001** | Module Scaffold & Baseline (`wms_core`, `product`) | ✅ Current (Pure Scaffold) |
-| **PLM-002** | Core Identity & One-to-One Link (`wms.product.logistics ↔ product.template`) | ⏳ Future |
+| **PLM-001** | Module Scaffold & Baseline (`wms_core`, `product`) | ✅ Merged |
+| **PLM-002** | Core Identity & One-to-One Link (`wms.product.logistics ↔ product.template`) | ✅ Current |
 | **PLM-003** | Operational Packagings / UOMs & Ti-Hi calculations | ⏳ Future |
 | **PLM-004** | Classifications & Handling Attributes (ABC, Velocity, Temp, Hazmat, Stack) | ⏳ Future |
 | **PLM-005** | Shelf Life Controls & HU Restrictions | ⏳ Future |
