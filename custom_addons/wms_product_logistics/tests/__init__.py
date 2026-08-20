@@ -4,3 +4,4 @@ from . import test_operational_uom_roles
 from . import test_tihi_configuration
 from . import test_operational_classifications
 from . import test_shelf_life_policy
+from . import test_hu_type_restrictions

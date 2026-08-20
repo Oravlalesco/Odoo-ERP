@@ -24,6 +24,7 @@ product.template están implementados desde PLM-002.
     "depends": [
         "wms_core",
         "product",
+        "stock",
     ],
     "data": [
         "security/wms_product_logistics_security.xml",
