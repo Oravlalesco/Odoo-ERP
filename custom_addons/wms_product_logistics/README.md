@@ -18,7 +18,7 @@ It defines the operational and logistical characteristics of products required b
 - Domain strategy profiles (Storage, Putaway, Replenishment, Allocation).
 - Quality inspection triggers and sampling rules.
 
-> **Current Status**: **PLM-005A — Shelf-Life Policy Master**. Política de vida útil (mínimos en días al recibir y al despachar) implementada sobre `wms.product.logistics`.
+> **Current Status**: **PLM-005B — HU Type Restrictions**. Restricciones de tipos de unidades de manejo (`allowed_hu_type_ids`, `default_hu_type_id`) implementadas sobre `wms.product.logistics`.
 
 ---
 
@@ -80,7 +80,21 @@ product.template (Odoo) ◄─── (1:0..1) ───► wms.product.logistics
 - `min_shelf_life_receipt_days` → Integer (mínimo de días restantes al recibir, >= 0 via DB CHECK).
 - `min_shelf_life_shipping_days` → Integer (mínimo de días restantes al despachar, >= 0 via DB CHECK).
 
-- **Odoo 19 Reutilization**: Reutiliza `product.template.uom_id` (base) y `product.template.uom_ids` (packagings como Many2many `uom.uom`). `product.uom` es la asociación variante+UOM+barcode, no se usa como FK del perfil.
+**Campos funcionales (PLM-005B):**
+- `allowed_hu_type_ids` → Many2many (`stock.package.type`), optional, no default.
+  - Vacío: sin restricción de tipos de HU.
+  - No vacío: sólo los tipos listados están permitidos.
+- `default_hu_type_id` → Many2one (`stock.package.type`), optional, restrict, no default.
+  - Con allowlist no vacío: `default_hu_type_id` DEBE pertenecer a `allowed_hu_type_ids`.
+- Reglas multi-company (server-side):
+  - Perfil de producto específico de compañía: admite tipos globales (`company_id=False`) o de la misma compañía.
+  - Perfil de producto global (`company_id=False`): sólo admite tipos globales (`company_id=False`).
+- Reasignación de producto (`product_tmpl_id`) revalida toda la configuración HU.
+
+- **Odoo 19 Reutilization**:
+  - `stock.package` = Instancia física del HU.
+  - `stock.package.type` = Catálogo oficial de tipos (dimensiones, peso tara/máximo, `package_use`).
+  - `wms.product.logistics` = Perfil de política WMS (allowed y default HU types únicamente).
 
 > [!NOTE]
 > **Odoo UOM como fuente de verdad cuantitativa (PLM-003B)**:
@@ -101,8 +115,8 @@ All items below represent future development stages:
 | **PLM-003A** | Operational UOM Roles (`pick_uom_id`, `case_uom_id`, `pallet_uom_id`) | ✅ Merged |
 | **PLM-003B** | Ti-Hi Configuration & Derived Quantities | ✅ Merged |
 | **PLM-004** | Classifications & Handling Attributes (ABC, Velocity, Temp, Hazmat, Stack) | ✅ Merged |
-| **PLM-005A** | Shelf-Life Policy Master (`min_shelf_life_receipt_days`, `shipping_days`) | ✅ Current |
-| **PLM-005B** | HU Type Restrictions (`allowed_hu_type_ids`, `default_hu_type_id`) | ⏳ Future |
+| **PLM-005A** | Shelf-Life Policy Master (`min_shelf_life_receipt_days`, `shipping_days`) | ✅ Merged |
+| **PLM-005B** | HU Type Restrictions (`allowed_hu_type_ids`, `default_hu_type_id`) | ✅ Current |
 | **PLM-006** | Strategy Profiles & Quality Configuration | ⏳ Future |
 | **PLM-007** | Product Logistics UI & Views | ⏳ Future |
 
@@ -127,5 +141,6 @@ The following belong in other domain modules, **not** in `wms_product_logistics`
 
 ```text
 wms_product_logistics ──► wms_core ──► base
-                      └──► product  ──► base
+                      ├──► product  ──► base
+                      └──► stock    ──► base
 ```

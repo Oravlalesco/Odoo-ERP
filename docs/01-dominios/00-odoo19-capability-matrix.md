@@ -153,11 +153,11 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | `height`, `width`, `packaging_length` | ✅ Reutilizar | **Ya existen** — dimensiones (nota: el campo es `packaging_length`, no `length`) |
 | `base_weight` | ✅ Reutilizar | **Ya existe** — peso tara |
 | `max_weight` | ✅ Reutilizar | **Ya existe** — peso máximo |
-| `barcode` | ✅ Reutilizar | **Ya existe** — código de barras |
-| Storage capacities | ✅ Reutilizar | **Ya existe** — capacidades de almacenamiento |
+| `storage_capacities` | ✅ Reutilizar | **Ya existe** — capacidades de almacenamiento |
 | `package_use` | ✅ Reutilizar | **Ya existe** — Selection: `disposable` / `reusable` |
+| Restricciones de tipo HU por producto | 🔧 Extender | Enlace M2M/M2O desde `wms.product.logistics` (`allowed_hu_type_ids`, `default_hu_type_id`). PLM-005B. |
 
-**Conclusión**: No necesitamos reconstruir jerarquía, dimensiones ni tipo de paquete. Solo agregar semántica WMS.
+**Conclusión**: No necesitamos reconstruir jerarquía, dimensiones ni catálogo de tipos de paquete. Solo agregar semántica y políticas de restricción WMS.
 
 ---
 
@@ -232,6 +232,7 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | Ti-Hi (cases per layer, layers per pallet) | 🆕 Crear WMS | Configuración física WMS (`cases_per_layer`, `layers_per_pallet`). PLM-003B. |
 | Cantidades derivadas de packaging | ✅ Reutilizar | Derivadas de Odoo `uom.uom` (`base_qty_per_case`, `cases_per_pallet`, `base_qty_per_pallet`). PLM-003B. |
 | Política de vida útil (receipt days, shipping days) | 🆕 Crear WMS | Mínimos de vida útil restante (`min_shelf_life_receipt_days`, `min_shelf_life_shipping_days`). PLM-005A. |
+| Restricciones de tipos HU (allowed_hu_type_ids, default_hu_type_id) | 🔧 Extender | Reutiliza `stock.package.type` vía `wms.product.logistics`. PLM-005B. |
 | Storage/putaway/replenishment/allocation profiles | 🆕 Crear WMS | Perfiles WMS |
 
 ---

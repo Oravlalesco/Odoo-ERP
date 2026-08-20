@@ -45,6 +45,8 @@ Reutilizamos extensivamente los modelos de producto de Odoo:
 | `stock.lot.use_date` | Best before date | ✅ |
 | `stock.lot.removal_date` | Fecha de remoción | ✅ |
 | `stock.lot.alert_date` | Fecha de alerta | ✅ |
+| `stock.package` | Instancia física de unidad de manejo (HU) | ✅ |
+| `stock.package.type` | Catálogo de tipos de paquete/HU (dimensiones, peso, uso) | ✅ |
 
 ---
 
@@ -158,12 +160,22 @@ La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin mo
 > - Valores negativos están protegidos y rechazados por DB CHECK.
 > - No se duplican fechas de expiración en el perfil WMS; la validación de lotes se ejecuta en motores Inbound/Outbound correspondientes.
 
-### Restricciones de HU
+### Restricciones de HU (PLM-005B)
 
-| Campo | En inglés | Significado |
-|---|---|---|
-| `allowed_hu_types` | Allowed HU Types | Tipos de `stock.package.type` permitidos |
-| `default_hu_type` | Default HU Type | Tipo de HU por defecto al recibir |
+> **Principio de Diseño:** Odoo 19 ya define `stock.package` como la instancia física de la unidad de manejo (HU) y `stock.package.type` como el catálogo de tipos (con dimensiones, pesos y tipo de uso). El perfil WMS (`wms.product.logistics`) define **únicamente** la política de tipos permitidos y tipo por defecto para el producto.
+
+| Campo | En inglés | Significado | Tipo | Reglas / Semántica |
+|---|---|---|---|---|
+| `allowed_hu_type_ids` | Allowed HU Types | Tipos de `stock.package.type` permitidos | `Many2many` | Vacío = sin restricción; no vacío = sólo esos tipos |
+| `default_hu_type_id` | Default HU Type | Tipo de HU preferido por defecto | `Many2one` (`ondelete=restrict`) | Opcional; si allowlist no está vacío, DEBE pertenecer a él |
+
+> **Invariantes y Reglas Multi-Compañía:**
+> - `stock.package` = HU físico (instancia).
+> - `stock.package.type` = catálogo reutilizado sin duplicar dimensiones, peso ni `package_use`.
+> - WMS no crea un catálogo paralelo ni modifica `stock.package.type`.
+> - Perfil con producto de compañía específica: acepta tipos globales (`company_id=False`) o de la misma compañía.
+> - Perfil con producto global (`company_id=False`): sólo acepta tipos globales (`company_id=False`).
+> - Reasignar `product_tmpl_id` revalida toda la configuración HU server-side.
 
 ### Perfiles WMS
 
@@ -194,6 +206,8 @@ La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin mo
 | `uom.uom` | Unidades de medida + packagings (via `uom_ids`) |
 | `product.uom` | Asociación variante + UOM + barcode |
 | `stock.lot` | Lotes con fechas de expiración |
+| `stock.package` | Instancia física de unidad de manejo (HU) |
+| `stock.package.type` | Catálogo de tipos de paquete/HU |
 
 ### Modelos Nuevos
 

@@ -44,6 +44,10 @@ class WmsProductLogistics(models.Model):
         min_shelf_life_receipt_days  → Días mínimos vida útil al recibir (>= 0)
         min_shelf_life_shipping_days → Días mínimos vida útil al despachar (>= 0)
 
+    Campos funcionales (PLM-005B):
+        allowed_hu_type_ids → Tipos HU permitidos (Many2many stock.package.type)
+        default_hu_type_id  → Tipo HU por defecto (Many2one stock.package.type, ondelete='restrict')
+
     Lifecycle:
         - Crear producto no crea perfil
         - Archivar producto → perfil queda active=False
@@ -218,6 +222,24 @@ class WmsProductLogistics(models.Model):
         string="Vida útil mínima al despachar (días)",
         help="Días mínimos de vida útil restante requeridos al despachar. "
         "0 indica sin requisito.",
+    )
+
+    # ------------------------------------------------------------------
+    # PLM-005B: HU Type Restrictions
+    # ------------------------------------------------------------------
+
+    allowed_hu_type_ids = fields.Many2many(
+        "stock.package.type",
+        string="Tipos HU permitidos",
+        help="Tipos de unidad de manejo (HU) permitidos para este producto. "
+        "Si está vacío, no hay restricción de tipo.",
+    )
+    default_hu_type_id = fields.Many2one(
+        "stock.package.type",
+        string="Tipo HU por defecto",
+        ondelete="restrict",
+        help="Tipo de unidad de manejo (HU) preferido por defecto al recibir o empacar. "
+        "Si se especifican tipos permitidos, debe pertenecer a dicha lista.",
     )
 
     @api.depends(
@@ -409,3 +431,80 @@ class WmsProductLogistics(models.Model):
                 raise ValidationError(_(
                     "Si el producto es apilable, el máximo de apilado debe ser al menos 2 niveles.",
                 ))
+
+    @api.constrains(
+        "product_tmpl_id",
+        "allowed_hu_type_ids",
+        "default_hu_type_id",
+    )
+    def _check_hu_type_restrictions(self):
+        """Validar restricciones de tipos HU y coherencia multi-compañía.
+
+        1. Compatibilidad multi-company de allowed_hu_type_ids:
+           - Si el producto tiene compañía: tipos permitidos deben ser globales o de la misma compañía.
+           - Si el producto es global (company_id=False): tipos permitidos deben ser globales (company_id=False).
+        2. Compatibilidad multi-company de default_hu_type_id:
+           - Si el producto tiene compañía: tipo por defecto debe ser global o de la misma compañía.
+           - Si el producto es global: tipo por defecto debe ser global.
+        3. Pertenencia de default_hu_type_id:
+           - Si allowed_hu_type_ids no está vacío: default_hu_type_id DEBE pertenecer a allowed_hu_type_ids.
+        """
+        for profile in self:
+            product = profile.product_tmpl_id
+            product_company = product.company_id
+            allowed = profile.allowed_hu_type_ids
+            default = profile.default_hu_type_id
+
+            # 1. Compatibilidad multi-company de tipos permitidos
+            for hu_type in allowed:
+                if product_company:
+                    if hu_type.company_id and hu_type.company_id != product_company:
+                        raise ValidationError(_(
+                            "El tipo HU '%(hu_type)s' pertenece a la compañía '%(type_company)s', "
+                            "incompatible con el producto '%(product)s' (compañía '%(prod_company)s').",
+                            hu_type=hu_type.display_name,
+                            type_company=hu_type.company_id.name,
+                            product=product.display_name,
+                            prod_company=product_company.name,
+                        ))
+                else:
+                    if hu_type.company_id:
+                        raise ValidationError(_(
+                            "El tipo HU '%(hu_type)s' pertenece a la compañía '%(type_company)s', "
+                            "pero el producto '%(product)s' es global y solo admite tipos HU globales.",
+                            hu_type=hu_type.display_name,
+                            type_company=hu_type.company_id.name,
+                            product=product.display_name,
+                        ))
+
+            # 2. Compatibilidad multi-company del tipo por defecto
+            if default:
+                if product_company:
+                    if default.company_id and default.company_id != product_company:
+                        raise ValidationError(_(
+                            "El tipo HU por defecto '%(hu_type)s' pertenece a la compañía '%(type_company)s', "
+                            "incompatible con el producto '%(product)s' (compañía '%(prod_company)s').",
+                            hu_type=default.display_name,
+                            type_company=default.company_id.name,
+                            product=product.display_name,
+                            prod_company=product_company.name,
+                        ))
+                else:
+                    if default.company_id:
+                        raise ValidationError(_(
+                            "El tipo HU por defecto '%(hu_type)s' pertenece a la compañía '%(type_company)s', "
+                            "pero el producto '%(product)s' es global y solo admite tipos HU globales.",
+                            hu_type=default.display_name,
+                            type_company=default.company_id.name,
+                            product=product.display_name,
+                        ))
+
+            # 3. Pertenencia del default a los tipos permitidos cuando la lista no está vacía
+            if allowed and default:
+                if default not in allowed:
+                    raise ValidationError(_(
+                        "El tipo HU por defecto '%(default)s' no pertenece a la lista de tipos HU permitidos "
+                        "para el producto '%(product)s'.",
+                        default=default.display_name,
+                        product=product.display_name,
+                    ))
