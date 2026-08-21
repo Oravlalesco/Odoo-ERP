@@ -389,4 +389,180 @@ class WmsInventoryBlock(models.Model):
         )
         return float(native_qty)
 
+    # ------------------------------------------------------------------
+    # MATCHING BATCH DE BLOQUEOS OPERACIONALES (INV-005)
+    # ------------------------------------------------------------------
+
+    @api.model
+    def get_blocked_quants(self, company_id, quants):
+        """Identificar en batch cuáles quants del recordset recibido están bloqueados.
+
+        Ejecuta exactamente 1 búsqueda ORM sobre wms.inventory.block para todo el batch
+        y evalúa en memoria las matrices dimensionales de scopes exactos para evitar N+1
+        y falsos positivos por producto cruzado.
+
+        :param company_id: Recordset singleton de res.company (requerido).
+        :param quants: Recordset de stock.quant a evaluar (0..N registros).
+        :return: Subconjunto de stock.quant que está bloqueado.
+        """
+        # 1. Validación de company_id
+        if not company_id or not hasattr(company_id, "_name") or company_id._name != "res.company":
+            raise ValueError("company_id debe ser un recordset singleton de res.company.")
+        company_id.ensure_one()
+
+        # 2. Validación de quants
+        if quants is None or not hasattr(quants, "_name") or quants._name != "stock.quant":
+            raise ValueError("quants debe ser un recordset de stock.quant.")
+
+        # 3. Validación explícita de permisos de lectura (ACL) antes de cualquier short-circuit
+        self.check_access("read")
+
+        # 4. Validación de autorización de compañía
+        if company_id.id not in self.env.companies.ids:
+            raise AccessError("No tiene acceso a la compañía especificada.")
+
+        # 5. Batch vacío -> retorno inmediato sin consultas ORM
+        if not quants:
+            return self.env["stock.quant"]
+
+        # 6. Validación de coherencia de compañía para todos los quants
+        for quant in quants:
+            if quant.location_id.company_id and quant.location_id.company_id != company_id:
+                raise AccessError("La ubicación de uno o más quants pertenece a una compañía distinta a la especificada.")
+
+        # ------------------------------------------------------------------
+        # FASE 1: Búsqueda batch de bloques potenciales (1 consulta ORM)
+        # ------------------------------------------------------------------
+        candidate_location_ids = quants.mapped("location_id").ids
+        candidate_product_ids = quants.mapped("product_id").ids
+        candidate_lot_ids = quants.mapped("lot_id").ids
+        candidate_package_ids = quants.mapped("package_id").ids
+        candidate_owner_ids = quants.mapped("owner_id").ids
+
+        base_domain = Domain([
+            ("company_id", "=", company_id.id),
+            ("released_at", "=", False),
+        ])
+
+        scope_domains = [
+            Domain([
+                ("block_scope", "=", "LOCATION"),
+                ("location_id", "parent_of", candidate_location_ids),
+            ]),
+            Domain([
+                ("block_scope", "=", "PRODUCT_LOCATION"),
+                ("product_id", "in", candidate_product_ids),
+                ("location_id", "parent_of", candidate_location_ids),
+            ]),
+        ]
+
+        if candidate_lot_ids:
+            scope_domains.append(
+                Domain([
+                    ("block_scope", "=", "LOT"),
+                    ("product_id", "in", candidate_product_ids),
+                    ("lot_id", "in", candidate_lot_ids),
+                ])
+            )
+
+        if candidate_package_ids:
+            scope_domains.append(
+                Domain([
+                    ("block_scope", "=", "PACKAGE"),
+                    ("package_id", "parent_of", candidate_package_ids),
+                ])
+            )
+
+        if candidate_owner_ids:
+            scope_domains.append(
+                Domain([
+                    ("block_scope", "=", "OWNER_LOCATION"),
+                    ("owner_id", "in", candidate_owner_ids),
+                    ("location_id", "parent_of", candidate_location_ids),
+                ])
+            )
+
+        domain = Domain.AND([base_domain, Domain.OR(scope_domains)])
+        blocks = self.search(domain)
+
+        if not blocks:
+            return self.env["stock.quant"]
+
+        # ------------------------------------------------------------------
+        # FASE 2: Matching exacto en memoria (Python)
+        # ------------------------------------------------------------------
+        location_block_paths = []
+        product_location_block_paths = {}  # product_id -> rutas parent_path de ubicación
+        lot_block_pairs = set()            # pares (product_id, lot_id)
+        package_block_paths = []           # rutas parent_path de paquetes
+        owner_location_block_paths = {}    # owner_id -> rutas parent_path de ubicación
+
+        for block in blocks:
+            scope = block.block_scope
+            if scope == "LOCATION":
+                if block.location_id.parent_path:
+                    location_block_paths.append(block.location_id.parent_path)
+            elif scope == "PRODUCT_LOCATION":
+                p_id = block.product_id.id
+                if block.location_id.parent_path:
+                    product_location_block_paths.setdefault(p_id, []).append(block.location_id.parent_path)
+            elif scope == "LOT":
+                lot_block_pairs.add((block.product_id.id, block.lot_id.id))
+            elif scope == "PACKAGE":
+                if block.package_id.parent_path:
+                    package_block_paths.append(block.package_id.parent_path)
+            elif scope == "OWNER_LOCATION":
+                o_id = block.owner_id.id
+                if block.location_id.parent_path:
+                    owner_location_block_paths.setdefault(o_id, []).append(block.location_id.parent_path)
+
+        blocked_quants = self.env["stock.quant"]
+        for quant in quants:
+            loc_path = quant.location_id.parent_path or ""
+            prod_id = quant.product_id.id
+            lot_id = quant.lot_id.id if quant.lot_id else False
+            pkg_path = quant.package_id.parent_path if quant.package_id else False
+            own_id = quant.owner_id.id if quant.owner_id else False
+
+            is_quant_blocked = False
+
+            # 1. Matching LOCATION: candidate.parent_path comienza con block.parent_path
+            if location_block_paths and loc_path:
+                for b_path in location_block_paths:
+                    if loc_path.startswith(b_path):
+                        is_quant_blocked = True
+                        break
+
+            # 2. Matching PRODUCT_LOCATION: mismo producto + candidate.parent_path comienza con block.parent_path
+            if not is_quant_blocked and prod_id in product_location_block_paths and loc_path:
+                for b_path in product_location_block_paths[prod_id]:
+                    if loc_path.startswith(b_path):
+                        is_quant_blocked = True
+                        break
+
+            # 3. Matching LOT: mismo producto + mismo lote
+            if not is_quant_blocked and lot_id:
+                if (prod_id, lot_id) in lot_block_pairs:
+                    is_quant_blocked = True
+
+            # 4. Matching PACKAGE: candidate.parent_path comienza con block.parent_path
+            if not is_quant_blocked and pkg_path:
+                for b_path in package_block_paths:
+                    if pkg_path.startswith(b_path):
+                        is_quant_blocked = True
+                        break
+
+            # 5. Matching OWNER_LOCATION: mismo propietario + candidate.parent_path comienza con block.parent_path
+            if not is_quant_blocked and own_id and own_id in owner_location_block_paths and loc_path:
+                for b_path in owner_location_block_paths[own_id]:
+                    if loc_path.startswith(b_path):
+                        is_quant_blocked = True
+                        break
+
+            if is_quant_blocked:
+                blocked_quants |= quant
+
+        return blocked_quants
+
+
 
