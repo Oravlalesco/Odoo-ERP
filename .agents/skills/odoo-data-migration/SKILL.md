@@ -4,58 +4,79 @@ description: >-
   Usar este skill cuando el usuario pida crear migraciones de datos, actualizar
   versiones de módulos, manejar cambios de schema de base de datos, o cuando se
   pregunte sobre el protocolo de migración del proyecto (ADR-022). Incluye scripts
-  pre/post-migrate y compatibilidad backward para rolling updates.
+  pre/post/end-migrate y compatibilidad backward para rolling updates.
 ---
 
-# Migraciones de Datos — Odoo 19
+# Migraciones de Datos y Schema — Odoo 19
 
-Guía para crear y gestionar migraciones de datos y schema en módulos Odoo 19.
+Guía para crear y gestionar migraciones de datos y schema en módulos Odoo 19 respetando el protocolo backward-compatible de ADR-022 y las capacidades del `MigrationManager` nativo de Odoo.
 
 > **ADR-022**: Database schema migrations son release-gated — las migraciones deben ser backward-compatible durante el rolling update.
 
 ---
 
-## Cuándo se Necesita una Migración
+## 🛑 Excepción de Contexto de Mantenimiento
 
-| Escenario | ¿Migración necesaria? |
-|---|---|
-| Agregar campo nuevo | No — Odoo lo crea automáticamente al actualizar |
-| Renombrar campo | Sí — datos se pierden sin migración |
-| Cambiar tipo de campo | Sí — requiere conversión de datos |
-| Eliminar campo | Sí — limpieza y respaldo de datos |
-| Cambiar `_name` de modelo | Sí — renombrar tabla e ir.model.data |
-| Agregar `models.Constraint()` a datos existentes | Sí — datos existentes podrían violar la constraint |
-| Cambiar lógica de computed stored | No — se recalcula al actualizar |
-| Mover datos entre modelos | Sí — script de migración |
-| Cambiar versión del módulo | Automático — trigger para scripts de migración |
+> **El uso de `SUPERUSER_ID` y SQL masivo sin ORM mostrado en este skill aplica EXCLUSIVAMENTE a scripts de migración ejecutados por el framework de upgrade de Odoo.**
+>
+> Los scripts de migración son código de mantenimiento con privilegios elevados que se ejecutan durante ventanas de actualización.
+> Está estrictamente prohibido extrapolar o copiar estos patrones a:
+> - `models/` (lógica de negocio o métodos de modelos runtime)
+> - `controllers/` (endpoints HTTP/API)
+> - Servicios o motores WMS runtime
+> - Métodos-comando o crons ordinarios
 
 ---
 
-## Estructura de Migraciones
+## Fases de Ejecución en el `MigrationManager` de Odoo 19
+
+El framework de migraciones de Odoo 19 soporta tres prefijos de script:
 
 ```text
-custom_addons/wms_work_engine/
-├── __manifest__.py                  # version: '19.0.1.1.0'
-└── migrations/
-    └── 19.0.1.1.0/                  # Coincide con la nueva versión
-        ├── pre-migrate.py           # Se ejecuta ANTES de actualizar modelos
-        ├── post-migrate.py          # Se ejecuta DESPUÉS de actualizar modelos
-        └── end-migrate.py           # Se ejecuta al final de todo el upgrade
+custom_addons/<nombre_modulo>/migrations/<version>/
+├── pre-migrate.py    # o pre-*.py: Se ejecuta ANTES de actualizar el schema del módulo (solo SQL)
+├── post-migrate.py   # o post-*.py: Se ejecuta DESPUÉS de actualizar el schema del módulo (ORM disponible)
+└── end-migrate.py    # o end-*.py: Se ejecuta DESPUÉS de que TODOS los módulos del upgrade han cargado
 ```
 
-### ¿Cuándo usar cada script?
+| Prefijo | Momento de Ejecución | Entorno Disponible | Uso Principal |
+|---|---|---|---|
+| `pre-*` | Antes de que Odoo toque el schema del módulo | Solo cursor SQL (`cr`) | DDL aditivo, preparación de columnas temporales, transformaciones SQL |
+| `post-*` | Tras cargar el schema y vistas del módulo | ORM disponible (`api.Environment(cr, SUPERUSER_ID, {})`) | Backfill de modelos del módulo, cómputos con lógica ORM |
+| `end-*` | Tras actualizar **todos** los módulos del proceso | ORM completo y registry consolidado | Validaciones de integridad cross-módulo, recomputes globales |
 
-| Script | Momento | Caso de uso |
-|---|---|---|
-| `pre-migrate.py` | Antes de que Odoo actualice el schema | Renombrar columnas, crear columnas temporales, respaldo de datos |
-| `post-migrate.py` | Después de que Odoo actualice el schema | Migrar datos, llenar campos nuevos, recalcular values |
-| `end-migrate.py` | Al final de TODO el proceso de upgrade | Limpieza final, verificación de integridad |
+---
+
+## Protocolo de Migración Backward-Compatible (ADR-022)
+
+En este proyecto, múltiples pods (`backoffice`, `wms-rf`, `wms-worker`) comparten la base de datos. Cada migración debe permitir que pods viejos y nuevos coexistan durante el rolling update (~5 minutos).
+
+```text
+FASE 1: PRE-DEPLOY / EXPAND (Release 1 — Migraciones 100% Backward-Compatible)
+   ✅ Agregar columnas nuevas aditivas (ADD COLUMN IF NOT EXISTS)
+   ✅ Backfill inicial de datos desde la columna vieja hacia la nueva
+   ✅ Agregar tablas nuevas e índices
+   ⛔ PROHIBIDO RENAME COLUMN destructivo (rompe pods viejos que consultan el nombre anterior)
+   ⛔ PROHIBIDO DROP COLUMN (rompe queries activas del código viejo)
+
+FASE 2: DEPLOY (Rolling update de pods en K8s — Coexistencia de ~5 min)
+   ⚠️ IMPORTANTE: El backfill inicial NO es sincronización continua.
+   Si ambas versiones pueden escribir durante la ventana de coexistencia:
+   - El código nuevo debe implementar compatibilidad de lectura/escritura dual (dual-write/fallback).
+   - O el Task Contract debe definir un mecanismo explícito de sincronización transaccional.
+
+FASE 3: POST-DEPLOY / CONTRACT (Release 2 Posterior — Limpieza Breaking)
+   - Solo cuando TODOS los pods ejecutan el código nuevo y ningún runtime usa el campo viejo.
+   ✅ Retirar la compatibilidad dual
+   ✅ Eliminar columnas obsoletas (DROP COLUMN)
+   ✅ Eliminar tablas descartadas
+```
 
 ---
 
 ## Templates de Scripts de Migración
 
-### pre-migrate.py
+### 1. `pre-migrate.py` (Fase Expand — SQL Aditivo sin ORM)
 
 ```python
 import logging
@@ -64,39 +85,27 @@ _logger = logging.getLogger(__name__)
 
 
 def migrate(cr, version):
-    """
-    Pre-migración: se ejecuta antes de que Odoo actualice el schema.
-    Usar para renombrar columnas, respaldar datos, etc.
-
-    Args:
-        cr: cursor de base de datos (sin ORM disponible)
-        version: versión anterior del módulo instalado
-    """
+    """Pre-migración (PRE-DEPLOY / Expand): aditiva y backward-compatible con código viejo."""
     if not version:
-        # Primera instalación, no hay nada que migrar
         return
 
-    _logger.info('Pre-migración wms_work_engine %s → 19.0.1.1.0', version)
+    _logger.info('Ejecutando pre-migración aditiva wms_work_engine %s → 19.0.1.1.0', version)
 
-    # Ejemplo: Renombrar columna antes de que Odoo la elimine
+    # 1. Agregar columna nueva sin destruir la anterior
     cr.execute("""
         ALTER TABLE wms_work
-        RENAME COLUMN old_field_name TO new_field_name
+        ADD COLUMN IF NOT EXISTS activity_area_id INTEGER
     """)
 
-    # Ejemplo: Respaldar datos de columna que se va a eliminar
-    cr.execute("""
-        ALTER TABLE wms_work
-        ADD COLUMN IF NOT EXISTS _backup_removed_field VARCHAR
-    """)
+    # 2. Backfill masivo eficiente con SQL para no saturar memoria en tablas grandes
     cr.execute("""
         UPDATE wms_work
-        SET _backup_removed_field = removed_field
-        WHERE removed_field IS NOT NULL
+        SET activity_area_id = zone_id
+        WHERE zone_id IS NOT NULL AND activity_area_id IS NULL
     """)
 ```
 
-### post-migrate.py
+### 2. `post-migrate.py` (Fase Backfill / Cómputo con ORM vía `SUPERUSER_ID`)
 
 ```python
 import logging
@@ -106,151 +115,82 @@ _logger = logging.getLogger(__name__)
 
 
 def migrate(cr, version):
-    """
-    Post-migración: se ejecuta después de que Odoo actualice el schema.
-    El ORM está disponible a través del environment.
-
-    Args:
-        cr: cursor de base de datos
-        version: versión anterior del módulo instalado
-    """
+    """Post-migración: se ejecuta después de que Odoo actualizó el schema de este módulo."""
     if not version:
         return
 
-    _logger.info('Post-migración wms_work_engine %s → 19.0.1.1.0', version)
+    _logger.info('Ejecutando post-migración wms_work_engine %s → 19.0.1.1.0', version)
+
+    # Excepción de contexto autorizada exclusivamente para migraciones de datos
+    env = api.Environment(cr, SUPERUSER_ID, {})
+
+    # Paginación por keyset (id > last_id) preservando el filtro de registros faltantes
+    last_id = 0
+    while True:
+        works = env['wms.work'].search([
+            ('id', '>', last_id),
+            ('activity_area_id', '=', False),
+        ], order='id', limit=1000)
+        if not works:
+            break
+
+        for work in works:
+            # Transformación o cómputo definido por el Task Contract
+            work.activity_area_id = work._compute_default_activity_area()
+
+        last_id = works[-1].id
+        env.invalidate_all()
+
+    _logger.info('Post-migración completada para wms.work')
+```
+
+### 3. `end-migrate.py` (Validaciones Finales Cross-Módulo)
+
+```python
+import logging
+from odoo import api, SUPERUSER_ID
+
+_logger = logging.getLogger(__name__)
+
+
+def migrate(cr, version):
+    """End-migración: se ejecuta tras finalizar la actualización de todos los módulos."""
+    if not version:
+        return
+
+    _logger.info('Ejecutando end-migración wms_work_engine %s → 19.0.1.1.0', version)
 
     env = api.Environment(cr, SUPERUSER_ID, {})
 
-    # Ejemplo: Llenar campo nuevo con valor calculado
-    works = env['wms.work'].search([('new_field', '=', False)])
-    for work in works:
-        work.new_field = work._compute_default_value()
-
-    _logger.info('Migrados %d registros de wms.work', len(works))
-
-    # Ejemplo: Migración con SQL directo (más eficiente para grandes volúmenes)
-    cr.execute("""
-        UPDATE wms_work
-        SET priority_class = CASE
-            WHEN priority >= 80 THEN 'high'
-            WHEN priority >= 40 THEN 'medium'
-            ELSE 'low'
-        END
-        WHERE priority_class IS NULL
-    """)
+    # Verificación de integridad cross-módulo una vez que todo el registry está cargado
+    invalid_count = env['wms.work'].search_count([
+        ('activity_area_id', '=', False),
+        ('state', 'not in', ('draft', 'cancelled')),
+    ])
+    if invalid_count > 0:
+        _logger.warning('Existen %d registros de trabajo sin área de actividad asignada tras el upgrade.', invalid_count)
 ```
 
 ---
 
-## Protocolo de Migración del Proyecto (ADR-022)
+## Cuándo Usar SQL Masivo vs ORM en Migraciones
 
-En este proyecto, múltiples workloads (`backoffice`, `wms-rf`, `wms-worker`) comparten la misma base de datos. Una migración no puede romper pods activos.
-
-### Regla Fundamental
-
-> Cada migración de schema debe poder coexistir con la versión anterior del código durante al menos 5 minutos (tiempo de rolling update).
-
-### Protocolo de 4 Pasos
-
-```text
-1. PRE-DEPLOY (migrations backward-compatible)
-   ✅ Agregar columnas nuevas (con DEFAULT)
-   ✅ Agregar tablas nuevas
-   ✅ Crear índices
-   ❌ NO renombrar columnas que el código viejo usa
-   ❌ NO eliminar columnas
-   ❌ NO cambiar tipos de datos
-
-2. DEPLOY (rolling update)
-   - Pods nuevos coexisten con pods viejos
-   - Ambos deben funcionar con el mismo schema
-   - Duración máxima: 5 minutos
-
-3. POST-DEPLOY (migrations que rompen backward-compat)
-   - Solo se ejecutan cuando TODOS los pods tienen código nuevo
-   ✅ Eliminar columnas obsoletas
-   ✅ Renombrar columnas (si el código nuevo ya no usa el nombre viejo)
-   ✅ Cambiar tipos de datos
-
-4. VERIFICATION
-   - Health checks
-   - Smoke tests
-   - Performance baseline comparison
-```
-
-### Migración Backward-Compatible (Ejemplo)
-
-Renombrar un campo de `zone_id` a `activity_area_id`:
-
-```python
-# PRE-DEPLOY: Agregar campo nuevo, copiar datos
-# pre-migrate.py (versión 19.0.1.1.0)
-def migrate(cr, version):
-    cr.execute("""
-        ALTER TABLE wms_work
-        ADD COLUMN IF NOT EXISTS activity_area_id INTEGER
-    """)
-    cr.execute("""
-        UPDATE wms_work SET activity_area_id = zone_id
-        WHERE zone_id IS NOT NULL
-    """)
-
-# DEPLOY: El código nuevo lee de activity_area_id
-# El código viejo sigue leyendo de zone_id (ambos existen)
-
-# POST-DEPLOY: Eliminar campo viejo (versión 19.0.1.2.0)
-# post-migrate.py
-def migrate(cr, version):
-    cr.execute("""
-        ALTER TABLE wms_work DROP COLUMN IF EXISTS zone_id
-    """)
-```
+| Criterio | SQL Directo en Migración | ORM con `SUPERUSER_ID` |
+|---|---|---|
+| **Volumen** | Millones de filas (evita OOM y lentitud) | Miles de filas o lotes pequeños |
+| **Lógica requerida** | Copia de columnas, valores estáticos, joins SQL | Lógica de negocio compleja, campos calculados con dependencias Python |
+| **Fase habitual** | `pre-migrate.py` | `post-migrate.py` / `end-migrate.py` |
+| **Manejo de Cache** | No aplica (el ORM aún no está instanciado en pre) | Requiere `env.invalidate_all()` periódico con paginación keyset |
 
 ---
 
-## Versionamiento de Módulos
+## Checklist de Verificación de Migraciones
 
-Formato: `<odoo_version>.<major>.<minor>.<patch>`
-
-```python
-# __manifest__.py
-{
-    'version': '19.0.1.0.0',   # Release inicial
-    # '19.0.1.0.1',             # Bugfix sin migración
-    # '19.0.1.1.0',             # Feature con migración
-    # '19.0.2.0.0',             # Major change
-}
-```
-
-La carpeta de migración debe coincidir exactamente con la nueva versión:
-
-```text
-migrations/
-├── 19.0.1.1.0/     # Migración de 19.0.1.0.x a 19.0.1.1.0
-│   └── post-migrate.py
-└── 19.0.2.0.0/     # Migración de 19.0.1.x.x a 19.0.2.0.0
-    ├── pre-migrate.py
-    └── post-migrate.py
-```
-
----
-
-## Mejores Prácticas
-
-1. **Siempre probar la migración** contra un respaldo de la BD de producción
-2. **Respaldar la BD** antes de cualquier migración: `./scripts/backup-db.ps1 -DbName "odoo_dev"`
-3. **Usar SQL directo** para migraciones masivas (> 10,000 registros) en vez del ORM
-4. **Loggear** todo: registros afectados, errores encontrados, tiempo de ejecución
-5. **Hacer las migraciones idempotentes**: ejecutarlas dos veces debe producir el mismo resultado
-6. **No usar `env.ref()` en pre-migrate** — los datos XML podrían no existir aún
-
----
-
-## Verificación
-
-1. ¿La carpeta de migración coincide exactamente con la nueva versión?
-2. ¿El script pre-migrate no usa el ORM?
-3. ¿La migración es backward-compatible (PRE-DEPLOY)?
-4. ¿Se respaldó la BD antes de probar?
-5. ¿La migración es idempotente?
-6. ¿Se probó el rolling update (pods viejos + nuevos coexistiendo)?
+1. ¿La carpeta de migración coincide exactamente con la versión del `__manifest__.py`?
+2. ¿`pre-migrate.py` es puramente aditivo y **NO** realiza `RENAME COLUMN` ni `DROP COLUMN` destructivo?
+3. ¿La migración permite la coexistencia pacífica de pods viejos y nuevos durante el rolling update (ADR-022)?
+4. ¿Puede un pod viejo escribir después del backfill inicial? Si es así, ¿cómo se mantiene la sincronización entre el schema viejo y nuevo durante la ventana de coexistencia?
+5. ¿El uso de `SUPERUSER_ID` está estrictamente restringido a scripts de migración (`post-` / `end-`) y no en runtime (INV-AGENT-005)?
+6. ¿La migración por lotes en ORM usa paginación por keyset preservando el filtro de registros no migrados?
+7. ¿La migración es idempotente (ejecutarla dos veces produce el mismo resultado)?
+8. ¿Si se utiliza `end-migrate.py`, la operación justifica ejecutarse tras el cierre de todos los módulos?

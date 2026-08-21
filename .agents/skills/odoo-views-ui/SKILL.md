@@ -9,22 +9,27 @@ description: >-
 
 # Vistas y UI — Odoo 19
 
-Guía para crear vistas XML, menús y acciones en módulos Odoo 19.
+Guía para crear vistas XML, acciones de ventana, menús y herencia con `xpath` en módulos Odoo 19.
 
 ---
 
-## Tipos de Vista
+## 🛑 Directivas de Alcance de UI
 
-| Tipo | Uso principal | Cuándo usar |
+1. **Creación Condicional**: Una interfaz de usuario **NO** se crea automáticamente por completitud. Si la tarea actual es puramente core/modelo/seguridad, las vistas están **FUERA DE SCOPE**.
+2. **Defensa en Profundidad**: Los atributos XML como `readonly="1"`, `invisible="..."` o `required="1"` son conveniencias visuales de la interfaz de usuario y **NUNCA** reemplazan ACLs, record rules ni validaciones en Python (`@api.constrains`).
+
+---
+
+## Tipos de Vista y Cuándo Usarlas
+
+| Tipo | Uso principal | Cuándo crearla |
 |---|---|---|
-| `form` | Detalle de un registro | Siempre — es la vista principal de edición |
-| `list` (tree) | Lista tabular de registros | Siempre — es la vista principal de navegación |
-| `kanban` | Tarjetas visuales por columnas | Cuando hay estados/etapas visuales |
-| `search` | Filtros y agrupaciones | Siempre — complementa list y kanban |
-| `pivot` | Tabla dinámica | Análisis y reporting |
-| `graph` | Gráficos | Visualización de métricas |
-| `calendar` | Calendario | Eventos con fechas |
-| `activity` | Timeline de actividades | Seguimiento de tareas |
+| `form` | Detalle y edición de registro | Cuando el Task Contract incluya edición o backoffice detallado |
+| `list` (tree) | Navegación tabular | Cuando exista flujo de navegación humana en backoffice |
+| `search` | Filtros y agrupaciones | Cuando exista una acción o lista que requiera búsqueda |
+| `kanban` | Tarjetas por etapas/estados | Cuando el proceso operacional requiera tablero visual |
+| `pivot` | Tabla dinámica multidimensional | Cuando el contrato incluya análisis o reporting |
+| `graph` | Gráficos y visualizaciones | Para dashboards y métricas de rendimiento |
 
 ---
 
@@ -38,7 +43,6 @@ Guía para crear vistas XML, menús y acciones en módulos Odoo 19.
     <field name="model">wms.work</field>
     <field name="arch" type="xml">
         <form string="Trabajo WMS">
-            <!-- Statusbar para máquina de estados -->
             <header>
                 <button name="action_validate" type="object"
                         string="Validar" class="oe_highlight"
@@ -51,14 +55,6 @@ Guía para crear vistas XML, menús y acciones en módulos Odoo 19.
                        statusbar_visible="draft,ready,assigned,in_progress,completed"/>
             </header>
             <sheet>
-                <!-- Ribbon para estados especiales -->
-                <div class="oe_button_box" name="button_box">
-                    <button name="action_view_lines" type="object"
-                            class="oe_stat_button" icon="fa-list">
-                        <field name="line_count" widget="statinfo"
-                               string="Líneas"/>
-                    </button>
-                </div>
                 <div class="oe_title">
                     <h1>
                         <field name="reference" readonly="1"/>
@@ -74,29 +70,22 @@ Guía para crear vistas XML, menús y acciones en módulos Odoo 19.
                     <group string="Asignación">
                         <field name="assigned_resource_id"/>
                         <field name="assigned_at"/>
-                        <field name="queue_id"/>
                     </group>
                 </group>
                 <notebook>
-                    <page string="Líneas" name="lines">
+                    <page string="Líneas de Trabajo" name="lines">
                         <field name="line_ids">
                             <list editable="bottom">
                                 <field name="sequence" widget="handle"/>
-                                <field name="action"/>
                                 <field name="location_id"/>
                                 <field name="location_dest_id"/>
                                 <field name="product_id"/>
                                 <field name="quantity"/>
-                                <field name="line_state"/>
                             </list>
                         </field>
                     </page>
-                    <page string="Notas" name="notes">
-                        <field name="notes" placeholder="Notas internas..."/>
-                    </page>
                 </notebook>
             </sheet>
-            <chatter/>
         </form>
     </field>
 </record>
@@ -109,9 +98,9 @@ Guía para crear vistas XML, menús y acciones en módulos Odoo 19.
     <field name="name">wms.work.list</field>
     <field name="model">wms.work</field>
     <field name="arch" type="xml">
-        <list string="Trabajos WMS" decoration-danger="state == 'exception'"
+        <list string="Trabajos WMS"
+              decoration-danger="state == 'exception'"
               decoration-success="state == 'completed'"
-              decoration-warning="state == 'reconciliation_required'"
               default_order="priority desc, deadline asc">
             <field name="reference"/>
             <field name="work_type_id"/>
@@ -128,41 +117,6 @@ Guía para crear vistas XML, menús y acciones en módulos Odoo 19.
 </record>
 ```
 
-### Vista Kanban
-
-```xml
-<record id="wms_work_view_kanban" model="ir.ui.view">
-    <field name="name">wms.work.kanban</field>
-    <field name="model">wms.work</field>
-    <field name="arch" type="xml">
-        <kanban default_group_by="state" class="o_kanban_small_column">
-            <field name="reference"/>
-            <field name="state"/>
-            <field name="priority"/>
-            <field name="assigned_resource_id"/>
-            <templates>
-                <t t-name="card">
-                    <div class="oe_kanban_content">
-                        <strong>
-                            <field name="reference"/>
-                        </strong>
-                        <div>
-                            <field name="work_type_id"/>
-                        </div>
-                        <div class="text-muted">
-                            Prioridad: <field name="priority"/>
-                        </div>
-                        <div t-if="record.assigned_resource_id.value">
-                            <field name="assigned_resource_id" widget="many2one_avatar"/>
-                        </div>
-                    </div>
-                </t>
-            </templates>
-        </kanban>
-    </field>
-</record>
-```
-
 ### Vista Search
 
 ```xml
@@ -170,33 +124,20 @@ Guía para crear vistas XML, menús y acciones en módulos Odoo 19.
     <field name="name">wms.work.search</field>
     <field name="model">wms.work</field>
     <field name="arch" type="xml">
-        <search string="Buscar trabajos">
+        <search string="Buscar Trabajos WMS">
             <field name="reference"/>
             <field name="work_type_id"/>
             <field name="assigned_resource_id"/>
             <field name="warehouse_id"/>
-            <!-- Filtros predefinidos -->
             <filter string="Listos" name="ready"
                     domain="[('state', '=', 'ready')]"/>
-            <filter string="En progreso" name="in_progress"
+            <filter string="En Progreso" name="in_progress"
                     domain="[('state', '=', 'in_progress')]"/>
-            <filter string="Excepciones" name="exception"
-                    domain="[('state', '=', 'exception')]"/>
-            <filter string="Requiere reconciliación" name="reconciliation"
-                    domain="[('state', '=', 'reconciliation_required')]"/>
-            <separator/>
-            <filter string="Hoy" name="today"
-                    domain="[('create_date', '>=', context_today().strftime('%Y-%m-%d'))]"/>
-            <!-- Agrupaciones -->
             <group expand="0" string="Agrupar por">
                 <filter string="Estado" name="group_state"
                         context="{'group_by': 'state'}"/>
-                <filter string="Tipo" name="group_type"
-                        context="{'group_by': 'work_type_id'}"/>
-                <filter string="Bodega" name="group_warehouse"
+                <filter string="Almacén" name="group_warehouse"
                         context="{'group_by': 'warehouse_id'}"/>
-                <filter string="Recurso" name="group_resource"
-                        context="{'group_by': 'assigned_resource_id'}"/>
             </group>
         </search>
     </field>
@@ -205,135 +146,82 @@ Guía para crear vistas XML, menús y acciones en módulos Odoo 19.
 
 ---
 
-## Acciones y Menús
+## Herencia de Vistas con `xpath`
 
-### Acción de Ventana
+### Tabla de Posiciones `position`
 
-```xml
-<record id="action_wms_work" model="ir.actions.act_window">
-    <field name="name">Trabajos WMS</field>
-    <field name="res_model">wms.work</field>
-    <field name="view_mode">list,form,kanban</field>
-    <field name="search_view_id" ref="wms_work_view_search"/>
-    <field name="context">{'search_default_ready': 1}</field>
-    <field name="help" type="html">
-        <p class="o_view_nocontent_smiling_face">
-            No hay trabajos WMS
-        </p>
-        <p>
-            Los trabajos se generan automáticamente por los motores de planificación
-            (inbound, allocation, replenishment, etc.).
-        </p>
-    </field>
-</record>
-```
+| Posición | Efecto | Ejemplo de Uso |
+|---|---|---|
+| `after` | Inserta el nuevo XML inmediatamente **después** del nodo coincidente | Agregar un campo debajo de otro existente |
+| `before` | Inserta el nuevo XML inmediatamente **antes** del nodo coincidente | Agregar un botón antes del botón primario |
+| `inside` | Inserta el nuevo XML como **último hijo** dentro del nodo coincidente | Agregar una página al `<notebook>` o un campo a un `<group>` |
+| `replace` | **Reemplaza completamente** el nodo coincidente con el nuevo XML | Sustituir un widget o estructura entera |
+| `attributes` | **Modifica atributos** del nodo sin reemplazar su contenido interno | Cambiar visibilidad, clases CSS o required |
 
-### Menús
+### Ejemplos de Herencia
 
 ```xml
-<!-- Menú raíz del módulo -->
-<menuitem id="menu_wms_root"
-          name="WMS"
-          web_icon="wms_work_engine,static/description/icon.png"
-          sequence="40"/>
-
-<!-- Menú de sección -->
-<menuitem id="menu_wms_operations"
-          name="Operaciones"
-          parent="menu_wms_root"
-          sequence="10"/>
-
-<!-- Menú que abre la acción -->
-<menuitem id="menu_wms_work"
-          name="Trabajos"
-          parent="menu_wms_operations"
-          action="action_wms_work"
-          sequence="10"/>
-```
-
----
-
-## Herencia de Vistas (xpath)
-
-Para modificar vistas existentes de Odoo:
-
-```xml
+<!-- 1. Insertar campo después de otro -->
 <record id="view_location_form_wms" model="ir.ui.view">
     <field name="name">stock.location.form.wms</field>
     <field name="model">stock.location</field>
     <field name="inherit_id" ref="stock.view_location_form"/>
     <field name="arch" type="xml">
-        <!-- Agregar campo después de uno existente -->
         <xpath expr="//field[@name='barcode']" position="after">
             <field name="wms_location_role"/>
         </xpath>
+    </field>
+</record>
 
-        <!-- Agregar página en un notebook existente -->
-        <xpath expr="//notebook" position="inside">
-            <page string="WMS" name="wms_config">
-                <group>
-                    <field name="pick_sequence"/>
-                    <field name="travel_sequence"/>
-                </group>
-            </page>
-        </xpath>
-
-        <!-- Reemplazar un campo -->
-        <xpath expr="//field[@name='usage']" position="attributes">
-            <attribute name="readonly">1</attribute>
+<!-- 2. Modificar atributos con position="attributes" -->
+<record id="view_picking_form_wms_attr" model="ir.ui.view">
+    <field name="name">stock.picking.form.wms.attr</field>
+    <field name="model">stock.picking</field>
+    <field name="inherit_id" ref="stock.view_picking_form"/>
+    <field name="arch" type="xml">
+        <xpath expr="//button[@name='action_confirm']" position="attributes">
+            <attribute name="invisible">state != 'draft' or is_wms_managed</attribute>
         </xpath>
     </field>
 </record>
 ```
 
-### Posiciones de xpath
-
-| Posición | Efecto |
-|---|---|
-| `before` | Inserta antes del nodo encontrado |
-| `after` | Inserta después del nodo encontrado |
-| `inside` | Inserta dentro del nodo (al final) |
-| `replace` | Reemplaza completamente el nodo |
-| `attributes` | Modifica atributos del nodo |
-
 ---
 
-## Widgets Comunes
+## Referencia Rápida de Widgets Comunes (Odoo 19)
 
-| Widget | Uso | Campo compatible |
+> **Nota**: Consultar siempre el código fuente Odoo 19 pinned para confirmar widgets y opciones vigentes.
+
+| Widget | Modelo/Campo Típico | Propósito |
 |---|---|---|
-| `statusbar` | Barra de estados horizontal | Selection |
-| `badge` | Etiqueta con color | Selection |
-| `many2one_avatar` | Avatar con nombre | Many2one |
-| `many2many_tags` | Tags con colores | Many2many |
-| `monetary` | Formato moneda | Float/Monetary |
-| `handle` | Drag & drop para reordenar | Integer (sequence) |
-| `progressbar` | Barra de progreso | Float/Integer |
-| `radio` | Botones radio | Selection |
-| `color_picker` | Selector de color | Integer |
-| `html` | Editor HTML enriquecido | Html |
+| `statusbar` | `fields.Selection` | Barra de etapas en el `<header>` del form |
+| `badge` | `fields.Selection` en list | Etiqueta coloreada con `decoration-*` |
+| `handle` | `fields.Integer` en list editable | Permite reordenar filas por drag & drop |
+| `monetary` | `fields.Monetary` | Formato de moneda con símbolo |
+| `many2one_avatar_user` | `fields.Many2one('res.users')` | Muestra avatar de usuario junto al nombre |
+| `boolean_toggle` | `fields.Boolean` | Interruptor switch tipo toggle |
 
 ---
 
-## Convenciones de xml_id
+## Convenciones de Nomenclatura para XML IDs
 
-| Tipo | Formato | Ejemplo |
+| Tipo de Registro | Convención de `id` | Ejemplo |
 |---|---|---|
-| Vista form | `<modelo_sin_puntos>_view_form` | `wms_work_view_form` |
-| Vista list | `<modelo_sin_puntos>_view_list` | `wms_work_view_list` |
-| Vista kanban | `<modelo_sin_puntos>_view_kanban` | `wms_work_view_kanban` |
-| Vista search | `<modelo_sin_puntos>_view_search` | `wms_work_view_search` |
-| Acción | `action_<modelo_sin_puntos>` | `action_wms_work` |
-| Menú raíz | `menu_<modulo>_root` | `menu_wms_root` |
-| Menú hijo | `menu_<nombre_descriptivo>` | `menu_wms_work` |
+| Vista Form | `<modelo_sin_puntos>_view_form` | `wms_work_view_form` |
+| Vista List | `<modelo_sin_puntos>_view_list` | `wms_work_view_list` |
+| Vista Search | `<modelo_sin_puntos>_view_search` | `wms_work_view_search` |
+| Vista Heredada | `view_<modelo_sin_puntos>_<extension>` | `view_location_form_wms` |
+| Acción de Ventana | `action_<modelo_sin_puntos>` | `action_wms_work` |
+| Menú Raíz | `menu_<modulo>_root` | `menu_wms_root` |
+| Submenú | `menu_<modulo>_<seccion>` | `menu_wms_operations` |
 
 ---
 
-## Verificación
+## Checklist de Verificación de UI
 
-1. ¿Todas las vistas tienen un `xml_id` único?
-2. ¿Los strings de usuario están en español?
-3. ¿La vista form tiene `<header>` con statusbar si el modelo tiene estados?
-4. ¿La vista search tiene filtros y agrupaciones relevantes?
-5. ¿Las herencias de vista usan `inherit_id` y `xpath` correctos?
-6. ¿La acción tiene `help` con mensaje de "sin contenido"?
+1. ¿Las vistas fueron solicitadas **explícitamente** por el Task Contract?
+2. ¿Todos los textos visibles (`string=`, `placeholder=`, nombres de menús) están 100% en español (INV-AGENT-001)?
+3. ¿Las vistas form tienen `<header>` con botones y statusbar si gestionan ciclo de vida?
+4. ¿Los `xml_id` son únicos y siguen las convenciones de nomenclatura del proyecto?
+5. ¿Las expresiones `xpath` usan la posición adecuada (`after`, `before`, `inside`, `attributes`, `replace`)?
+6. ¿No se delega la seguridad del modelo a validaciones puramente cosméticas de XML?

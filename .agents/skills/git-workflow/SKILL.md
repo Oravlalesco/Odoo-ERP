@@ -7,9 +7,49 @@ description: >-
   branching adaptada para desarrollo de módulos Odoo con Docker/K8s.
 ---
 
-# GitFlow — Flujo de Trabajo Git
+# GitFlow y Control de Versiones — Odoo 19
 
-Estrategia de branching GitFlow adaptada para el proyecto ERP-WMS-TMS con Odoo 19, Docker y Kubernetes.
+Estrategia de branching GitFlow adaptada para el desarrollo incremental por Task Contracts en el proyecto ERP-WMS-TMS.
+
+---
+
+## 🛑 Protocolo de Merge de Tasks Contractuales WMS
+
+Para cada slice o tarea técnica revisada bajo Task Contract:
+
+```text
+1. BASE CONGELADA:
+   Se fija un baseline SHA en develop (ej: develop@9926c4f...).
+   La feature branch se crea directamente desde este baseline exacto ($FROZEN_BASE).
+
+2. EXACT COMMIT COUNT:
+   La feature branch contiene exactamente el número de commits autorizado (típicamente 1 commit exacto).
+
+3. REVIEW & APPROVED HEAD:
+   El reviewer audita el código y aprueba un commit HEAD exacto (ej: HEAD 8fcf736...).
+
+4. DESPUÉS DE APPROVED HEAD:
+   - ⛔ NO hacer rebase
+   - ⛔ NO hacer amend
+   - ⛔ NO hacer squash
+   - ⛔ NO agregar commits adicionales
+   - Ningún SHA involucrado puede cambiar tras la aprobación
+
+5. VERIFICACIÓN PRE-MERGE (DOBLE ASSERT):
+   - git fetch origin
+   - Comprobar que origin/develop coincide exactamente con la BASE CONGELADA.
+   - Comprobar que el develop local coincide exactamente con la BASE CONGELADA.
+   - Si cualquiera diverge: ⛔ STOP NO MERGE (detener, recongelar baseline y reauditar).
+
+6. MERGE & VERIFICACIÓN POST-MERGE:
+   - git checkout develop && git merge --no-ff feature/...
+   - ✓ merge.parents[0] == baseline develop anterior (FROZEN_BASE)
+   - ✓ merge.parents[1] == approved feature HEAD
+   - ✓ merge.tree == approved feature HEAD tree
+   - ✓ develop == merge SHA
+   - ✓ Feature branch eliminada tanto local como remotamente
+   - ✓ Congelar nuevo baseline SHA
+```
 
 ---
 
@@ -18,7 +58,7 @@ Estrategia de branching GitFlow adaptada para el proyecto ERP-WMS-TMS con Odoo 1
 ```text
 main ─────────────────●──────────────────●──────────────── producción
                      ╱                  ╱
-                    ╱ merge            ╱ merge
+                    ╱ merge --no-ff    ╱ merge --no-ff
                    ╱                  ╱
 release/1.0.0 ────●─────●           ╱
                  ╱       │ bugfix   ╱
@@ -28,279 +68,145 @@ develop ──●──●──●──●──●──●──●──●
           │     │        │        │     │
           │     └─ feature/wms-work-engine
           │              │
-          └── feature/wms-dock-management
-                         │
-                    hotfix/fix-pick-confirm ──── (desde main)
+          └── feature/hu-003a-sscc-generator
 ```
 
 ### Ramas Permanentes
 
-| Rama | Propósito | Quién hace merge |
+| Rama | Propósito | Regla de Merge |
 |---|---|---|
-| `main` | Producción — código desplegado | Solo desde `release/*` o `hotfix/*` |
-| `develop` | Integración — última versión de desarrollo | Desde `feature/*` vía PR |
+| `main` | Producción — código desplegado | Solo desde `release/*` o `hotfix/*` mediante PR |
+| `develop` | Integración — baseline de desarrollo | Solo desde `feature/*` aprobadas vía `--no-ff` |
 
 ### Ramas Temporales
 
-| Rama | Origen | Destino | Convención de nombre |
+| Rama | Origen | Destino | Convención de Nombre |
 |---|---|---|---|
-| `feature/*` | `develop` | `develop` | `feature/<modulo>-<descripcion>` |
+| `feature/*` | `develop` | `develop` | `feature/<modulo>-<descripcion>` o `feature/<task-id>-<slug>` |
 | `release/*` | `develop` | `main` + `develop` | `release/<version>` |
 | `hotfix/*` | `main` | `main` + `develop` | `hotfix/<descripcion-corta>` |
-| `bugfix/*` | `release/*` | `release/*` + `develop` | `bugfix/<descripcion-corta>` |
 
 ---
 
-## Ciclo de Desarrollo Completo
+## Ciclo de Desarrollo de una Feature Contractual
 
-### 1. Crear Feature Branch
+### 1. Crear Feature Branch desde la BASE Congelada
 
-```bash
-# Asegurarse de estar en develop actualizado
-git checkout develop
-git pull origin develop
-
-# Crear la rama de feature
-git checkout -b feature/wms-dock-management
-
-# Trabajar en la feature...
-git add .
-git commit -m "feat(wms-dock): agregar modelo wms.dock con estado y capacidades"
-```
-
-#### Nomenclatura de Features
-
-```text
-feature/wms-work-engine          ← módulo nuevo completo
-feature/wms-location-extend      ← extensión de modelo existente
-feature/erp-partner-fields       ← extensión ERP
-feature/tms-route-planning       ← módulo TMS
-feature/infra-ci-pipeline        ← infraestructura/CI
-feature/docs-adr-028             ← documentación
-```
-
-### 2. Mantener Feature Actualizada
+En tareas contractuales, la rama **NO** se crea desde "lo último de develop", sino desde el SHA exacto congelado (`$FROZEN_BASE`):
 
 ```bash
-# Sincronizar con develop periódicamente (rebase preferido)
-git checkout feature/wms-dock-management
 git fetch origin
-git rebase origin/develop
+git checkout -b feature/<task-id>-<slug> "$FROZEN_BASE"
 
-# Si hay conflictos, resolverlos y continuar
-git rebase --continue
-
-# Si el rebase es muy complejo, usar merge como alternativa
-git merge origin/develop
+# Verificar inmediatamente que el merge-base es exactamente el baseline acordado:
+test "$(git merge-base "$FROZEN_BASE" HEAD)" = "$FROZEN_BASE"
 ```
 
-> **Regla**: Hacer rebase contra `develop` al menos una vez al día si la feature dura más de 2 días.
-
-### 3. Pull Request a Develop
+### 2. Desarrollo y Commits Estructurados
 
 ```bash
-# Push de la feature
-git push origin feature/wms-dock-management
+git add custom_addons/wms_inventory/
+# Mensaje conciso (máximo 72 caracteres en la primera línea)
+git commit -m "feat(inventory): agregar journal operacional de inventario"
 ```
 
-Crear PR en la plataforma (GitHub/GitLab) con:
-- **Título**: Sigue el formato de commit convencional (ej: `feat(wms-dock): modelo y vistas de dock management`)
-- **Descripción**: Qué hace, por qué, ADRs relevantes, cómo probar
-- **Reviewers**: Al menos 1 revisor
-- **Labels**: `wms`, `feature`, `odoo-module`
+### 3. Sincronización Pre-Review
 
-#### Checklist del PR
-
-```markdown
-- [ ] Tests pasan: `docker compose exec odoo odoo --test-enable --stop-after-init -i <modulo> -d odoo_test`
-- [ ] Módulo se instala sin errores
-- [ ] Seguridad configurada (ir.model.access.csv + grupos)
-- [ ] Migraciones son backward-compatible (ADR-022)
-- [ ] ADRs respetados (011, 012, 013, 026)
-- [ ] Documentación actualizada si aplica
-```
-
-### 4. Merge a Develop
+En tasks contractuales con BASE congelada:
+- `git commit --amend` está permitido antes del approval si se conserva exactamente el mismo baseline.
+- **⛔ NO** hacer `git rebase origin/develop` solo porque `develop` haya avanzado remotamente.
+- Si es imprescindible cambiar la BASE: **detener la tarea**, acordar y recongelar un nuevo baseline, rebasear y repetir todos los gates de auditoría y runtime.
 
 ```bash
-# Merge con squash para features pequeñas
+# Push inicial
+git push -u origin feature/<task-id>-<slug>
+# Si hubo amend pre-review conservando la BASE congelada:
+git push --force-with-lease origin feature/<task-id>-<slug>
+```
+
+### 4. Merge a Develop tras Aprobación
+
+```bash
+# 1. Doble verificación estricta de BASE congelada
+git fetch origin
+
+# Comprobación de que tanto el remoto como el local están en FROZEN_BASE:
+# test "$(git rev-parse origin/develop)" = "$FROZEN_BASE"
+# test "$(git rev-parse develop)" = "$FROZEN_BASE"
+# Si cualquiera no coincide → ⛔ STOP NO MERGE (no hacer git pull ciego)
+
+# 2. Merge --no-ff exacto
 git checkout develop
-git merge --squash feature/wms-dock-management
-git commit -m "feat(wms-dock): modelo completo de dock management (#42)"
-
-# Merge sin squash para features grandes (preserva historia)
-git checkout develop
-git merge --no-ff feature/wms-dock-management
-
-# Eliminar la rama
-git branch -d feature/wms-dock-management
-git push origin --delete feature/wms-dock-management
-```
-
-> **Preferencia del proyecto**: Usar `--no-ff` (no fast-forward) para mantener la historia de la rama visible en el log.
-
----
-
-## Releases
-
-### 5. Crear Release Branch
-
-Cuando `develop` tiene suficientes features para un release:
-
-```bash
-git checkout develop
-git pull origin develop
-
-# Crear rama de release
-git checkout -b release/19.0.1.0.0
-```
-
-#### En la rama de release:
-
-1. **Actualizar versiones** en todos los `__manifest__.py` afectados
-2. **Ejecutar tests completos**: todos los módulos
-3. **Verificar migraciones**: protocolo ADR-022
-4. **Solo bugfixes** — NO se agregan features nuevas
-5. **Actualizar CHANGELOG** si existe
-
-```bash
-# Bugfix en la rama de release
-git commit -m "fix(wms-work): corregir validación de prioridad en edge case"
-```
-
-### 6. Finalizar Release
-
-```bash
-# Merge a main
-git checkout main
-git pull origin main
-git merge --no-ff release/19.0.1.0.0
-git tag -a v19.0.1.0.0 -m "Release 19.0.1.0.0 — WMS Dock Management + Work Engine fixes"
-git push origin main --tags
-
-# Merge de vuelta a develop (para incluir bugfixes del release)
-git checkout develop
-git merge --no-ff release/19.0.1.0.0
+git merge --no-ff feature/<task-id>-<slug>
 git push origin develop
 
-# Eliminar rama de release
-git branch -d release/19.0.1.0.0
-git push origin --delete release/19.0.1.0.0
-```
-
-#### Versionamiento de Tags
-
-```text
-v19.0.1.0.0    ← Coincide con la versión de Odoo en __manifest__.py
-v19.0.1.1.0    ← Minor: features nuevas
-v19.0.1.1.1    ← Patch: bugfixes
-v19.0.2.0.0    ← Major: breaking changes
+# 3. Eliminación de la rama
+git branch -d feature/<task-id>-<slug>
+git push origin --delete feature/<task-id>-<slug>
 ```
 
 ---
 
-## Hotfixes
+## Evidencia de Review y Walkthrough Obligatoria
 
-### 7. Hotfix (corrección urgente en producción)
+Antes de solicitar la aprobación de un PR o Task, el informe / walkthrough debe contener:
 
-Cuando hay un bug crítico en `main` que no puede esperar al próximo release:
-
-```bash
-# Crear desde main
-git checkout main
-git pull origin main
-git checkout -b hotfix/fix-pick-confirm-duplicate
-
-# Corregir el bug
-git commit -m "fix(wms-work): prevenir duplicación en confirm pick por race condition
-
-ADR-010: se refuerza la idempotencia del confirm pick con
-INSERT ON CONFLICT en la tabla wms_idempotency."
-
-# Merge a main
-git checkout main
-git merge --no-ff hotfix/fix-pick-confirm-duplicate
-git tag -a v19.0.1.0.1 -m "Hotfix: prevenir duplicación en confirm pick"
-git push origin main --tags
-
-# Merge a develop (para que el fix no se pierda)
-git checkout develop
-git merge --no-ff hotfix/fix-pick-confirm-duplicate
-git push origin develop
-
-# Si hay un release activo, merge también ahí
-git checkout release/19.0.1.1.0
-git merge --no-ff hotfix/fix-pick-confirm-duplicate
-
-# Eliminar rama
-git branch -d hotfix/fix-pick-confirm-duplicate
-git push origin --delete hotfix/fix-pick-confirm-duplicate
-```
-
-> **Importante**: Un hotfix SIEMPRE se mergea tanto a `main` como a `develop` (y al release activo si existe).
-
----
-
-## Relación con el Protocolo de Migración (ADR-022)
-
-El flujo de GitFlow se integra con el protocolo de deploy:
-
-```text
-feature/wms-new-field
-    │
-    ▼
-develop ──── CI: lint + tests
-    │
-    ▼
-release/19.0.1.1.0
-    │
-    ├── 1. PRE-DEPLOY: migraciones backward-compatible
-    │      (ALTER TABLE ADD COLUMN, nuevas tablas, índices)
-    │
-    ├── 2. DEPLOY: rolling update de pods
-    │      (pods viejos + nuevos coexisten ~5 min)
-    │
-    ├── 3. POST-DEPLOY: migraciones breaking
-    │      (DROP COLUMN, ALTER TYPE — solo cuando todos los pods son nuevos)
-    │
-    └── 4. VERIFICATION: health checks + smoke tests
-```
-
-### Regla para Migraciones
-
-- Las migraciones PRE-DEPLOY van en el **mismo commit** que el feature
-- Las migraciones POST-DEPLOY van en un **commit separado** en la rama de release
-- Nunca incluir migraciones POST-DEPLOY en una feature branch
-
----
-
-## Flujo Resumido
-
-```text
-┌─────────┐    PR + Review    ┌─────────┐    Release     ┌──────┐
-│ feature │ ─────────────────▶│ develop │ ──────────────▶│ main │
-└─────────┘                   └─────────┘                └──────┘
-                                   ▲                        │
-                                   │                        │
-                                   └────── hotfix ──────────┘
-```
-
-| Acción | Comando rápido |
+| Elemento | Requisito de Evidencia |
 |---|---|
-| Nueva feature | `git checkout develop && git checkout -b feature/<nombre>` |
-| Sync con develop | `git fetch origin && git rebase origin/develop` |
-| Crear release | `git checkout develop && git checkout -b release/<version>` |
-| Finalizar release | merge `release` → `main` (tag) → `develop` |
-| Hotfix | `git checkout main && git checkout -b hotfix/<nombre>` |
-| Finalizar hotfix | merge `hotfix` → `main` (tag) → `develop` |
+| **BASE Congelada** | SHA exacto del baseline inicial acordado |
+| **Commit HEAD** | `CANDIDATE HEAD` en pre-review / `APPROVED HEAD` tras aprobación |
+| **Commit Count** | Exactamente el número autorizado (típicamente 1) |
+| **Changed Files** | Lista exacta de archivos modificados (diff exacto con Task Contract) |
+| **Task / ADRs** | Identificadores de la tarea y ADRs aplicables |
+| **Gates Exigidos** | Evidencia de los gates requeridos por el Task Contract: para código runtime, Clean Install / Upgrade y tests; para tareas documentales/tooling, static gates correspondientes |
+| **Directivas Globales** | Verificación estática: `Product Unit`, 100% español, sin `sudo()`, etc. |
+| **Desviaciones** | Cero desviaciones no autorizadas respecto al contrato |
 
 ---
 
-## Verificación
+## Releases y Hotfixes
 
-1. ¿La rama se creó desde la base correcta (`develop` para features, `main` para hotfixes)?
-2. ¿Los commits siguen la convención de mensajes del proyecto?
-3. ¿La feature se rebaseó contra `develop` antes del PR?
-4. ¿El release se mergeó tanto a `main` como a `develop`?
-5. ¿El hotfix se mergeó tanto a `main` como a `develop`?
-6. ¿Se creó un tag con la versión correcta al mergear a `main`?
+### Release Branch
+
+```bash
+git checkout -b release/19.0.1.0.0 develop
+# Ajustes de versión en __manifest__.py y tests completos
+git checkout main
+git merge --no-ff release/19.0.1.0.0
+git tag -a v19.0.1.0.0 -m "Release 19.0.1.0.0"
+git push origin main --tags
+
+git checkout develop
+git merge --no-ff release/19.0.1.0.0
+git push origin develop
+git branch -d release/19.0.1.0.0
+```
+
+### Hotfix Branch
+
+```bash
+git checkout -b hotfix/fix-quant-lock main
+# Corrección crítica...
+git checkout main
+git merge --no-ff hotfix/fix-quant-lock
+git tag -a v19.0.1.0.1 -m "Hotfix: quant lock issue"
+git push origin main --tags
+
+git checkout develop
+git merge --no-ff hotfix/fix-quant-lock
+git push origin develop
+git branch -d hotfix/fix-quant-lock
+```
+
+---
+
+## Checklist de Verificación Git
+
+1. ¿La rama feature se originó directamente desde el SHA congelado `$FROZEN_BASE`?
+2. ¿El diff contiene **exactamente** los archivos autorizados por el Task Contract?
+3. ¿El número de commits es el exacto requerido (típicamente 1 commit)?
+4. ¿La primera línea del commit tiene ≤72 caracteres y sigue Conventional Commits?
+5. ¿Se evitó hacer rebase ciego contra `develop` durante y después del review?
+6. ¿Tras la aprobación del HEAD, se verificó que **tanto `origin/develop` como `develop` local** coinciden con la BASE congelada antes del merge `--no-ff`?
+7. ¿El tree de `develop` post-merge coincide exactamente con el tree del HEAD aprobado?
+8. ¿El walkthrough contiene toda la evidencia requerida según el tipo de tarea (runtime vs documental)?

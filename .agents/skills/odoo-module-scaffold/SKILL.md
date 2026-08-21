@@ -7,174 +7,155 @@ description: >-
   organizar un nuevo módulo WMS, TMS o ERP.
 ---
 
-# Scaffold de Módulos Odoo 19
+# Scaffold de Módulos — Odoo 19
 
-Guía paso a paso para crear módulos (addons) de Odoo 19 en este proyecto ERP-WMS-TMS.
+Guía para crear e inicializar módulos (addons) en `custom_addons/` siguiendo la metodología de desarrollo incremental por slices.
 
 ---
 
-## Estructura Obligatoria de un Módulo
+## 🛑 Estructura Incremental por Slices
 
-Cada módulo en `custom_addons/` debe seguir esta estructura:
+> **Un addon contiene ÚNICAMENTE los directorios y archivos exigidos por el Task Contract actual.**
+>
+> Está estrictamente prohibido crear directorios vacíos, archivos vacíos o componentes anticipados "por completitud".
+
+### Ejemplos de Estructuras según el Slice
+
+#### 1. Pure Scaffold (Slice Inicial de Inicialización)
+```text
+custom_addons/wms_example/
+├── __init__.py
+├── __manifest__.py
+├── README.md
+└── tests/
+    ├── __init__.py
+    └── test_module_installation.py
+```
+
+#### 2. Core Model & Security (Slice de Modelo sin UI)
+```text
+custom_addons/wms_example/
+├── __init__.py
+├── __manifest__.py
+├── README.md
+├── models/
+│   ├── __init__.py
+│   └── example_model.py
+├── security/
+│   ├── ir.model.access.csv
+│   └── wms_example_security.xml
+└── tests/
+    ├── __init__.py
+    └── test_example_model.py
+```
+
+#### 3. Backoffice UI (Slice Posterior de Interfaz)
+```text
+custom_addons/wms_example/
+└── views/
+    ├── example_views.xml
+    └── example_menus.xml
+```
+
+---
+
+## Catálogo de Estructura Completa Posible de un Addon
+
+> **⚠️ Advertencia**: La siguiente lista muestra las carpetas estándar que un addon puede llegar a tener a lo largo de su ciclo de vida.
+> **Existir en este catálogo NO autoriza a crear la carpeta.** Cada carpeta se crea únicamente cuando el Task Contract vigente la especifica.
 
 ```text
 custom_addons/<nombre_modulo>/
-├── __manifest__.py           # Obligatorio: metadata del módulo
-├── __init__.py               # Obligatorio: imports de Python
-├── models/
-│   ├── __init__.py
-│   └── <modelo>.py           # Modelos de datos
-├── views/
-│   └── <modelo>_views.xml    # Vistas (form, tree, kanban, search)
-├── security/
-│   ├── ir.model.access.csv   # Permisos de acceso (ACL)
-│   └── security.xml          # Grupos y record rules
-├── data/
-│   └── <datos_iniciales>.xml # Datos de configuración inicial
-├── demo/
-│   └── demo.xml              # Datos de demostración
-├── wizards/
-│   ├── __init__.py
-│   └── <wizard>.py           # TransientModels (wizards)
-├── reports/
-│   └── <reporte>.xml         # Templates de reportes QWeb
-├── static/
-│   └── description/
-│       └── icon.png          # Ícono del módulo (opcional)
-├── i18n/
-│   └── es.po                 # Traducciones
-├── controllers/
-│   ├── __init__.py
-│   └── main.py               # Controladores HTTP/JSON-RPC
-└── tests/
-    ├── __init__.py
-    └── test_<modelo>.py      # Tests unitarios
+├── __manifest__.py           # Metadata del módulo (obligatorio)
+├── __init__.py               # Imports raíz de Python (obligatorio)
+├── README.md                 # Documentación del módulo
+├── models/                   # Modelos persistentes (si el módulo define datos)
+├── security/                 # Grupos, privilegios, ACLs y record rules (si hay modelos)
+├── views/                    # Vistas XML, acciones y menús (solo si hay UI requerida)
+├── data/                     # Datos iniciales / secuencias / datos no modificables
+├── demo/                     # Datos de prueba para desarrollo
+├── wizards/                  # TransientModels y wizards interactivos
+├── reports/                  # Reportes QWeb / PDF / ZPL
+├── controllers/              # Controladores HTTP / JSON-RPC
+├── migrations/               # Scripts de migración pre/post/end (ADR-022)
+├── i18n/                     # Archivos de traducción (.po)
+├── static/                   # Recursos frontend (JS, CSS, SCSS, XML OWL, imágenes)
+└── tests/                    # Tests unitarios y de integración (obligatorio)
 ```
+
+---
 
 ## Template de `__manifest__.py`
 
 ```python
 {
-    'name': 'WMS Work Engine',                    # Nombre legible en español
-    'version': '19.0.1.0.0',                      # Formato: odoo_version.major.minor.patch
-    'category': 'Inventory/WMS',                   # Categoría funcional
-    'summary': 'Motor de trabajo dirigido WMS',    # Resumen corto en español
+    'name': 'Motor de Trabajo WMS',               # Nombre visible en español (INV-AGENT-001)
+    'version': '19.0.1.0.0',                      # Formato: 19.0.major.minor.patch
+    'category': 'Inventory/WMS',
+    'summary': 'Motor de trabajo dirigido WMS',
     'description': """
-Motor de Trabajo Dirigido (Directed Work Engine)
-=================================================
-
-Transforma necesidades logísticas en unidades de trabajo ejecutables
-y las distribuye a través de colas a los recursos disponibles.
+Motor de Trabajo Dirigido WMS
+==============================
+Transforma necesidades logísticas en unidades de trabajo ejecutables.
     """,
-    'author': 'Tu Empresa',
-    'website': 'https://tu-empresa.com',
+    'author': 'Equipo de Desarrollo',
     'license': 'LGPL-3',
     'depends': [
-        'stock',                                   # Dependencias de Odoo
-        'wms_warehouse_master',                    # Dependencias de módulos WMS propios
+        'stock',
+        'wms_core',
     ],
     'data': [
-        'security/security.xml',                   # Primero: grupos de seguridad
-        'security/ir.model.access.csv',            # Segundo: ACLs
-        'views/work_views.xml',                    # Después: vistas
-        'data/work_type_data.xml',                 # Último: datos iniciales
-    ],
-    'demo': [
-        'demo/demo.xml',
+        'security/security.xml',                   # 1. Privilegios y Grupos
+        'security/ir.model.access.csv',            # 2. ACLs
+        # Vistas y datos solo si el slice actual los incluye:
+        # 'views/work_views.xml',
     ],
     'installable': True,
-    'application': True,                           # True si es un módulo principal con menú propio
+    'application': True,
     'auto_install': False,
 }
 ```
+
+---
 
 ## Convenciones de Nomenclatura
 
 | Elemento | Convención | Ejemplo |
 |---|---|---|
-| Directorio del módulo | `snake_case` con prefijo | `wms_work_engine` |
-| Nombre técnico (`_name`) | Puntos como separador, prefijo `wms.` / `tms.` | `wms.work`, `wms.work.line` |
-| Nombre de tabla SQL | Odoo genera automáticamente: puntos → underscores | `wms_work`, `wms_work_line` |
-| Archivos Python de modelos | `snake_case` sin prefijo | `work.py`, `work_line.py` |
+| Directorio del módulo | `snake_case` con prefijo | `wms_inventory`, `tms_routing` |
+| Nombre técnico (`_name`) | Puntos como separador, prefijo `wms.` / `tms.` | `wms.work`, `wms.inventory.event` |
+| Tabla SQL (automática) | Puntos convertidos a underscores | `wms_work`, `wms_inventory_event` |
+| Archivos Python de modelo | `snake_case` sin prefijo de módulo | `inventory_event.py`, `work.py` |
 | Archivos XML de vistas | `<modelo>_views.xml` | `work_views.xml` |
-| `xml_id` de vistas | `<modulo>.<modelo>_view_<tipo>` | `wms_work_engine.work_view_form` |
-| `xml_id` de acciones | `<modulo>.action_<modelo>` | `wms_work_engine.action_work` |
-| `xml_id` de menús | `<modulo>.menu_<nombre>` | `wms_work_engine.menu_work_root` |
-| Campos | `snake_case` en inglés | `assigned_resource_id`, `lease_expires_at` |
+| Archivos de seguridad | `security.xml` o `<modulo>_security.xml` | `wms_inventory_security.xml` |
 
-## `__init__.py` del Módulo
+---
 
-```python
-from . import models
-from . import wizards      # Solo si tiene wizards
-from . import controllers  # Solo si tiene controllers
-```
-
-## `models/__init__.py`
-
-```python
-from . import work
-from . import work_line
-from . import work_type
-```
-
-## Pasos para Crear un Módulo Nuevo
-
-1. **Crear directorio** en `custom_addons/<nombre_modulo>/`
-2. **Crear `__manifest__.py`** con las dependencias correctas
-3. **Crear `__init__.py`** raíz y en cada subdirectorio con archivos Python
-4. **Crear modelos** en `models/`
-5. **Crear vistas** en `views/`
-6. **Crear seguridad** en `security/` (ACL + grupos)
-7. **Crear tests** en `tests/`
-8. **Instalar el módulo**:
-
-### Instalar/Actualizar en desarrollo (Docker Compose)
+## Ejecución con Docker Compose
 
 ```bash
-# Instalar módulo nuevo
-docker compose exec odoo odoo -i wms_work_engine -d odoo_dev --stop-after-init
+# 1. Inicialización limpia de BD de pruebas (desechable)
+docker compose run --rm --entrypoint "" odoo odoo \
+  db --db_host db --db_port 5432 -r odoo -w $DB_PASS \
+  init --force odoo_test
 
-# Actualizar módulo existente
-docker compose exec odoo odoo -u wms_work_engine -d odoo_dev --stop-after-init
+# 2. Instalación del módulo nuevo
+docker compose run --rm odoo odoo \
+  --stop-after-init -i <nombre_modulo> -d odoo_test
 
-# Ejecutar tests del módulo
-docker compose exec odoo odoo --test-enable --stop-after-init \
-    -i wms_work_engine -d odoo_test
+# 3. Ejecución de tests del módulo
+docker compose run --rm odoo odoo \
+  --test-enable --stop-after-init -d odoo_test \
+  --test-tags /<nombre_modulo>
 ```
 
-### ⛔ Producción: NUNCA instalar/actualizar manualmente
+---
 
-```text
-PROHIBIDO:
-  kubectl exec → odoo -u → producción
-  docker compose exec → odoo -i → producción
-  Cualquier acceso directo del agente o desarrollador a BD de producción
+## Checklist de Verificación de Scaffold
 
-Producción solo se despliega mediante:
-  CI/CD pipeline
-  → migration gate (ADR-022: backward-compatible)
-  → immutable image (ADR-027: versión fijada por digest)
-  → rolling deployment (pods viejos + nuevos coexisten ~5 min)
-  → health checks + smoke tests
-```
-
-## Orden de Declaración de Datos en `__manifest__.py`
-
-El orden importa porque Odoo procesa los archivos secuencialmente:
-
-1. `security/security.xml` — Grupos de seguridad primero
-2. `security/ir.model.access.csv` — ACLs que referencian los grupos
-3. `data/` — Datos de configuración que pueden requerir ACLs
-4. `views/` — Vistas que pueden referenciar grupos para visibilidad
-5. `reports/` — Reportes al final
-
-## Verificación
-
-Después de crear un módulo:
-
-1. ¿`__manifest__.py` tiene `installable: True`?
-2. ¿Todas las dependencias están listadas en `depends`?
-3. ¿Todos los archivos `.xml` y `.csv` están listados en `data`?
-4. ¿Todos los `__init__.py` importan los archivos Python correctos?
-5. ¿El módulo se instala sin errores? → `docker compose exec odoo odoo -i <modulo> -d <db> --stop-after-init`
+1. ¿El módulo incluye **únicamente** los archivos y carpetas requeridos por el Task Contract actual?
+2. ¿No existen carpetas vacías ni archivos `.keep`?
+3. ¿`__manifest__.py` tiene `installable: True`, nombre legible en español y dependencias correctas?
+4. ¿El orden en `data` respeta: seguridad primero, luego ACLs, luego vistas/datos?
+5. ¿Todos los `__init__.py` importan los módulos Python reales existentes?
+6. ¿El módulo se instala limpiamente en Docker sin errores?

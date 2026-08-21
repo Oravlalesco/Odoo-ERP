@@ -9,7 +9,20 @@ description: >-
 
 # Diseño de Modelos ORM — Odoo 19
 
-Guía para diseñar modelos de datos en Odoo 19 respetando los ADRs y convenciones de este proyecto WMS.
+Guía para diseñar modelos de datos en Odoo 19 respetando los ADRs, las directivas de `.agents/rules/odoo-project-conventions.md` y la metodología incremental del proyecto WMS.
+
+---
+
+## 🛑 Pre-flight Obligatorio
+
+Antes de diseñar cualquier modelo o campo:
+
+1. **Leer `.agents/rules/odoo-project-conventions.md`** y acatar las directivas `INV-AGENT-001` a `INV-AGENT-008`.
+2. **Consultar ADRs aplicables** (`docs/05-decisiones/01-adr.md`).
+3. **Verificar estado de `develop`**: Comprobar qué modelos y APIs ya existen realmente.
+4. **Verificar Odoo 19 pinned**: Si una decisión depende de campos, UOM o comportamiento nativo, consultar el source pinned oficial registrado en `docs/03-plataforma/09-odoo-baseline-registry.md`.
+5. **Leer el Task Contract vigente**: Define el scope exacto de campos y relaciones autorizadas. Los ejemplos de esta skill son ilustrativos y NO autorizan agregar campos o defaults adicionales.
+6. **No inferir**: No agregar campos "útiles a futuro", defaults no requeridos, índices prematuros ni modelos satélite especulativos.
 
 ---
 
@@ -27,32 +40,32 @@ class StockLocationWms(models.Model):
     _inherit = 'stock.location'
 
     # Catálogo aprobado: 12 roles operacionales WMS.
-    # wms_location_role es OPCIONAL (default=False).
+    # wms_location_role es opcional (sin default contextual).
     # False = ubicación no clasificada por el WMS.
     #
     # INVARIANTE (ADR-026):
     #   Si wms_location_role tiene valor, usage DEBE ser 'internal'.
     #   Nunca modificar ni agregar valores a stock.location.usage.
     wms_location_role = fields.Selection([
-        ('STORAGE', 'Storage'),
-        ('RESERVE_STORAGE', 'Reserve Storage'),
-        ('PICK_FACE', 'Pick Face'),
-        ('RECEIVING', 'Receiving'),
-        ('QUALITY_HOLD', 'Quality Hold'),
-        ('QUARANTINE', 'Quarantine'),
-        ('DAMAGE', 'Damage'),
-        ('STAGING', 'Staging'),
-        ('CONSOLIDATION', 'Consolidation'),
-        ('PACKING', 'Packing'),
-        ('CROSS_DOCK', 'Cross-Dock'),
-        ('DOCK', 'Dock'),
-    ], string='WMS Location Role', default=False,
-       help='Operational function of this location within the WMS. '
-            'Does not replace stock.location.usage. '
-            'Only valid on locations with usage=internal.')
+        ('STORAGE', 'Almacenamiento'),
+        ('RESERVE_STORAGE', 'Almacenamiento de reserva'),
+        ('PICK_FACE', 'Frente de Recolección'),
+        ('RECEIVING', 'Recepción'),
+        ('QUALITY_HOLD', 'Retención de calidad'),
+        ('QUARANTINE', 'Cuarentena'),
+        ('DAMAGE', 'Merma / Dañado'),
+        ('STAGING', 'Preparación'),
+        ('CONSOLIDATION', 'Consolidación'),
+        ('PACKING', 'Empaque'),
+        ('CROSS_DOCK', 'Cruce de Andén'),
+        ('DOCK', 'Muelle'),
+    ], string='Rol WMS de Ubicación',
+       help='Función operacional de esta ubicación dentro del WMS. '
+            'No reemplaza stock.location.usage. '
+            'Solo válida en ubicaciones con usage=internal.')
     pick_sequence = fields.Integer(
-        string='Secuencia de picking',
-        help='Orden de recorrido para picking optimizado')
+        string='Secuencia de Recolección',
+        help='Orden de recorrido para recolección optimizada.')
 ```
 
 ### 2. Modelo nuevo (`_name` propio)
@@ -68,8 +81,8 @@ class WmsWork(models.Model):
     _rec_name = 'reference'
 
     reference = fields.Char(
-        string='Referencia', required=True, copy=False, readonly=True,
-        default=lambda self: self.env['ir.sequence'].next_by_code('wms.work'))
+        string='Referencia', required=True, copy=False, readonly=True)
+    # Default presente solo cuando el ciclo de vida del Task Contract lo exige explícitamente:
     state = fields.Selection([
         ('draft', 'Borrador'),
         ('ready', 'Listo'),
@@ -81,8 +94,9 @@ class WmsWork(models.Model):
         ('reconciliation_required', 'Requiere reconciliación'),
         ('cancelled', 'Cancelado'),
     ], string='Estado', default='draft', required=True, tracking=True)
-    priority = fields.Integer(string='Prioridad', default=50)
-    deadline = fields.Datetime(string='Fecha límite')
+    # Sin default salvo especificación contractual:
+    priority = fields.Integer(string='Prioridad')
+    deadline = fields.Datetime(string='Fecha Límite')
 ```
 
 ### 3. Modelo satélite con relación 1:0..1 (Many2one + UNIQUE)
@@ -102,7 +116,7 @@ wms.product.logistics
 class WmsProductLogistics(models.Model):
     """Perfil logístico WMS — complemento opcional de product.template."""
     _name = 'wms.product.logistics'
-    _description = 'Perfil logístico WMS'
+    _description = 'Perfil Logístico WMS'
 
     product_tmpl_id = fields.Many2one(
         'product.template', required=True, ondelete='cascade',
@@ -111,7 +125,7 @@ class WmsProductLogistics(models.Model):
         ('A', 'A — Alta rotación'),
         ('B', 'B — Media rotación'),
         ('C', 'C — Baja rotación'),
-    ], string='Clase ABC', default='C')
+    ], string='Clase ABC')
 
     # Garantiza relación 1:0..1 a nivel de base de datos
     _product_tmpl_unique = models.Constraint(
@@ -128,11 +142,10 @@ la ilusión de que el hijo "es" el padre. Problemas:
 |---|---|
 | No garantiza 1:0..1 | Sin UNIQUE, múltiples registros pueden apuntar al mismo padre |
 | Delega toda la interfaz | `wms.product.logistics` expondría todos los campos de `product.template` |
-| Confunde la API | `logistics.name` devolvería el nombre del producto — ¿es eso lo que queremos? |
+| Confunde la API | `logistics.name` devolvería el nombre del producto |
 | Complejidad en queries | JOINs implícitos en cada lectura |
 
-**Regla del proyecto**: Preferir `Many2one` + `UNIQUE constraint` sobre `_inherits` para modelos satélite WMS. Solo considerar `_inherits` si el modelo realmente **es un tipo de** otro (ej: una especialización que necesita comportarse como el padre en toda la API).
-
+**Regla del proyecto**: Preferir `Many2one` + `UNIQUE constraint` sobre `_inherits` para modelos satélite WMS.
 
 ---
 
@@ -173,16 +186,18 @@ Odoo consolida quants con `_merge_quants()` agrupando por:
 ```python
 name = fields.Char(string='Nombre', required=True, translate=True)
 description = fields.Text(string='Descripción')
-quantity = fields.Float(string='Cantidad', digits='Product Unit of Measure')
-is_active = fields.Boolean(string='Activo', default=True)
-date_planned = fields.Datetime(string='Fecha planificada')
+# Precisión Odoo 19 exacta para cantidades de producto (INV-AGENT-002):
+quantity = fields.Float(string='Cantidad', digits='Product Unit', required=True)
+is_active = fields.Boolean(string='Activo', default=True)  # Default funcional legítimo si requerido
+date_planned = fields.Datetime(string='Fecha Planificada')
 amount = fields.Monetary(string='Monto', currency_field='currency_id')
-priority = fields.Integer(string='Prioridad', default=50)
+priority = fields.Integer(string='Prioridad')  # Sin default salvo requerimiento contractual
 ```
 
 ### Campos Selection
 
 ```python
+# Keys en inglés, labels en español (INV-AGENT-001):
 state = fields.Selection([
     ('draft', 'Borrador'),
     ('confirmed', 'Confirmado'),
@@ -193,18 +208,18 @@ state = fields.Selection([
 ### Campos Relacionales
 
 ```python
-# Many2one — SIEMPRE definir ondelete
+# Many2one — SIEMPRE definir ondelete. Sin default mágico contextual (INV-AGENT-003).
 warehouse_id = fields.Many2one(
-    'stock.warehouse', string='Bodega', required=True,
-    ondelete='restrict')
+    'stock.warehouse', string='Almacén', required=True,
+    ondelete='restrict', check_company=True, index=True)
 
 # One2many — inverso de un Many2one
 line_ids = fields.One2many(
-    'wms.work.line', 'work_id', string='Líneas')
+    'wms.work.line', 'work_id', string='Líneas de Trabajo')
 
 # Many2many
 queue_ids = fields.Many2many(
-    'wms.queue', string='Colas compatibles',
+    'wms.queue', string='Colas Compatibles',
     relation='wms_resource_queue_rel',    # Nombre explícito de tabla relación
     column1='resource_id',
     column2='queue_id')
@@ -214,12 +229,12 @@ queue_ids = fields.Many2many(
 
 ```python
 units_per_pallet = fields.Integer(
-    string='Unidades por pallet',
+    string='Unidades por Palé',
     compute='_compute_units_per_pallet', store=True)
 
 @api.depends('units_per_case', 'cases_per_layer', 'layers_per_pallet')
 def _compute_units_per_pallet(self):
-    """Calcula el total de unidades por pallet completo."""
+    """Calcula el total de unidades por palé completo."""
     for record in self:
         record.units_per_pallet = (
             record.units_per_case
@@ -252,11 +267,6 @@ class WmsWork(models.Model):
     _check_priority_range = models.Constraint(
         'CHECK(priority >= 0 AND priority <= 100)',
         'La prioridad debe estar entre 0 y 100.')
-
-    # ❌ LEGACY — NO usar en Odoo 19:
-    # _sql_constraints = [
-    #     ('claim_token_unique', 'UNIQUE(claim_token)', '...'),
-    # ]
 ```
 
 ### models.Index
@@ -277,11 +287,10 @@ class WmsWork(models.Model):
 ```python
 @api.constrains('priority')
 def _check_priority(self):
-    """Valida que la prioridad esté en rango válido."""
+    """Valida que la prioridad esté en el rango permitido."""
     for record in self:
-        if not (0 <= record.priority <= 100):
-            raise ValidationError(
-                'La prioridad debe estar entre 0 y 100.')
+        if record.priority and not (0 <= record.priority <= 100):
+            raise ValidationError('La prioridad debe estar entre 0 y 100.')
 ```
 
 ---
@@ -300,7 +309,6 @@ class WmsWork(models.Model):
     def action_validate(self):
         """Valida el trabajo y lo pasa a estado Listo."""
         self.ensure_one()
-        # ... validaciones ...
         self.write({'state': 'ready'})
 
     def action_cancel(self):
@@ -316,7 +324,7 @@ class WmsWork(models.Model):
 ```python
 @api.model_create_multi
 def create(self, vals_list):
-    """Asigna secuencia automática al crear."""
+    """Asigna secuencia automática al crear si el contrato lo estipula."""
     for vals in vals_list:
         if not vals.get('reference'):
             vals['reference'] = self.env['ir.sequence'].next_by_code(
@@ -328,17 +336,13 @@ def create(self, vals_list):
 
 ```python
 class StockPackageWms(models.Model):
-    """Extensión de stock.package con campos WMS para Handling Units."""
+    """Extensión WMS existente de stock.package."""
     _inherit = 'stock.package'
 
-    hu_state = fields.Selection([
-        ('created', 'Creado'),
-        ('in_use', 'En uso'),
-        ('sealed', 'Sellado'),
-        ('shipped', 'Enviado'),
-        ('disposed', 'Descartado'),
-    ], string='Estado HU', default='created')
-    seal_number = fields.Char(string='Número de sello')
+    # NOTA ARQUITECTÓNICA (INV-AGENT-006 / INV-AGENT-008):
+    # stock.package ya está extendido en develop por wms_handling_unit.
+    # No duplicar aquí su schema: consultar siempre la implementación vigente en develop.
+    # No asumir un campo `sscc`; la identidad SSCC utiliza el campo nativo stock.package.name.
 ```
 
 ---
@@ -356,11 +360,15 @@ Para un resumen ejecutivo, ver [references/capability-matrix-summary.md](./refer
 
 ---
 
-## Verificación
+## Checklist de Verificación
 
 1. ¿El modelo tiene `_description` en español?
-2. ¿Todos los `Many2one` tienen `ondelete` definido?
-3. ¿Las constraints usan `models.Constraint()` (no `_sql_constraints`)?
-4. ¿Se verificó la Capability Matrix para no recrear algo que Odoo ya tiene?
-5. ¿Se respetan los ADRs (011, 012, 013, 026)?
-6. ¿Los campos computed con `store=True` tienen `@api.depends` correcto?
+2. ¿Todos los `string=`, `help=`, labels de `Selection` y comentarios de código están 100% en español (INV-AGENT-001)?
+3. ¿Las cantidades de producto usan la precisión Odoo 19 real `digits="Product Unit"` (INV-AGENT-002)?
+4. ¿Cada `default=` está respaldado explícitamente por el Task Contract o ADR (sin defaults inferidos/mágicos) (INV-AGENT-003)?
+5. ¿Todos los campos `Many2one` tienen `ondelete` definido y `check_company=True` si aplica?
+6. ¿Las constraints SQL usan `models.Constraint()` (no `_sql_constraints`) con nombres que empiezan con `_`?
+7. ¿Se verificó la Capability Matrix y el source Odoo 19 pinned para no recrear componentes nativos (INV-AGENT-007)?
+8. ¿Se respetan los ADRs obligatorios (001, 011, 012, 013, 026)?
+9. ¿Los campos computed con `store=True` tienen `@api.depends` correcto?
+10. ¿Se evitó introducir campos "útiles para después" no exigidos por el Task Contract (INV-AGENT-008)?
