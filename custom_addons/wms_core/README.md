@@ -23,9 +23,23 @@ truly cross-cutting across domain modules:
 - Common constants or enumerations
 - Cross-domain event infrastructure (when justified)
 - WMS security taxonomy (category, privileges, groups)
+- Shared WMS root navigation menu (`wms_core.menu_wms_root`)
 
 > **Principle**: No abstraction is added until a concrete, demonstrated
 > need exists in at least two domain modules.
+
+---
+
+## Shared Navigation Root
+
+`wms_core` define y posee exclusivamente el menú raíz compartido del WMS (`menu_wms_root`).
+Los módulos de dominio especializados (maestros, inventario, trabajos, etc.) cuelgan sus
+propios submenús y acciones de esta raíz según su respectivo RBAC.
+
+```text
+menu_wms_root (WMS, sequence=145) [wms_core]
+└── [Submenús de dominio añadidos por módulos especializados]
+```
 
 ---
 

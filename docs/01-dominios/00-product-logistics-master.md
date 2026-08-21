@@ -199,9 +199,9 @@ La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin mo
 ### Vistas y UI (PLM-007)
 
 La interfaz de usuario del dominio se estructura en tres subfeatures secuenciales:
-- **PLM-007A (Vistas Administrativas)**: Definición de vistas `list` (10 columnas operacionales), `form` (25 campos funcionales agrupados con protección en relaciones), `search` (filtros y agrupadores) y acción de ventana `action_wms_product_logistics`.
-- **PLM-007B (Navegación y RBAC)**: Exposición controlada de menús y validación de visibilidad según roles WMS.
-- **PLM-007C (Integración con Producto)**: Acceso contextual desde el formulario de `product.template` hacia el perfil WMS correspondiente.
+- **PLM-007A (Vistas Administrativas — Merged)**: Definición de vistas `list` (10 columnas operacionales), `form` (25 campos funcionales agrupados en 6 pestañas con protección en relaciones), `search` (filtros y agrupadores) y acción de ventana `action_wms_product_logistics`.
+- **PLM-007B (Navegación y RBAC — Current)**: Exposición de menús según ownership boundary (`menu_wms_root` poseído por `wms_core`, `menu_wms_master_data` y `menu_wms_product_logistics` poseídos por `wms_product_logistics`) con validación de visibilidad nativa Odoo y permisos RBAC sin escalación a grupos de Stock.
+- **PLM-007C (Integración con Producto — Future)**: Acceso contextual desde el formulario de `product.template` hacia el perfil WMS correspondiente.
 
 ---
 

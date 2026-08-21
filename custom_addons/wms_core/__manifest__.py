@@ -20,6 +20,7 @@ Domain functionality lives in specialized modules
     "depends": ["base"],
     "data": [
         "security/security.xml",
+        "views/wms_navigation.xml",
     ],
     "installable": True,
     "application": False,

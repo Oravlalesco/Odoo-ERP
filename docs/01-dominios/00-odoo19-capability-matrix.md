@@ -237,6 +237,7 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | Ejecución de calidad en recepción (inspections, results, checks) | 🆕 Crear WMS | Diferido a dominios Inbound / Quality Engine / Rule Engine. |
 | Storage/putaway/replenishment/allocation profiles | ⏸ Diferido | PLM-006B: diferido hasta existencia de entidades de dominio reales y Typed Policy Engine. |
 | Vistas administrativas (list, form, search, action) | 🆕 Crear WMS | Vistas administrativas para gestión de `wms.product.logistics`. PLM-007A. |
+| Navegación WMS y exposición RBAC (menus) | 🆕 Crear WMS | Jerarquía `WMS` > `Maestros` > `Perfiles logísticos` con RBAC nativo. PLM-007B. |
 
 ---
 
