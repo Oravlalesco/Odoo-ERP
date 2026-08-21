@@ -22,8 +22,8 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 - `wms_location_role` (aportado y gestionado por `wms_warehouse_master`) define la semántica operativa por ubicación (recepción, staging, picking, putaway, calidad, packing, despacho).
 - El campo nativo `stock.location.usage` **no se extiende** con valores personalizados (ADR-026).
 
-### 4. Bloqueos Operacionales y Matching API (`wms.inventory.block`)
-- **Estado actual**: **INV-005 — Operational Block Batch Matching API**.
+### 4. Bloqueos Operacionales y Disponibilidad WMS (`wms.inventory.block`)
+- **Estado actual**: **INV-006 — Aggregate Block-Aware Availability Engine**.
 - **Persistencia (INV-002)**:
   - Scopes: `LOCATION`, `PRODUCT_LOCATION`, `LOT`, `PACKAGE`, `OWNER_LOCATION`.
   - Tipos: `CYCLE_COUNT`, `INVESTIGATION`, `HOLD`, `CUSTOMS`.
@@ -34,18 +34,20 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
   - `is_blocked(...)`: Verificación booleana ultra rápida con `search_count(limit=1)`.
   - Semántica jerárquica: `LOCATION` y `PACKAGE` cubren ancestros/descendientes (`parent_of`).
 - **Guardia de Disponibilidad de Candidato Exacto (INV-004)**:
-  - `get_unblocked_available_quantity(...)`: Calcula la cantidad disponible para un candidato exacto aplicando la guardia de bloqueos.
+  - `get_unblocked_available_quantity(...)`: Calcula la cantidad disponible para un candidato exacto (`strict=True`).
   - Short-circuit: Si existe bloqueo activo (`is_blocked == True`) -> Retorna `0.0` sin consultar `stock.quant`.
-  - Validación de coherencia: `location_id.company_id` debe coincidir con `company_id` o ser compartida (`False`), de lo contrario lanza `AccessError`.
-  - Si no está bloqueado -> Retorna la disponibilidad nativa calculada con `strict=True` y `allow_negative=False`.
-  - No altera ni sobrescribe métodos de Stock nativos (`_get_available_quantity`, `_get_reserve_quantity`, `_gather`, `_action_assign`).
+  - Validación de coherencia: `location_id.company_id` debe coincidir con `company_id` o ser compartida (`False`).
 - **Matching API Batch sobre Quants (INV-005)**:
   - `get_blocked_quants(...)`: Identifica en batch cuáles `stock.quant` están bloqueados dentro de un conjunto transitorio de 0..N candidatos.
-  - Rendimiento anti-N+1: Exactamente 1 búsqueda ORM amplia sobre `wms.inventory.block` para todo el batch.
-  - Evaluación exacta en memoria: Matriz Python que protege contra falsos positivos por producto cruzado (cross-product false positives).
-  - Jerarquía in-memory: Validación de ancestros mediante `candidate.parent_path.startswith(block.parent_path)` para ubicaciones y paquetes.
-  - Cero persistencia: `wms.inventory.block` jamás almacena `quant_id` ni crea tablas de mapeo intermedias.
-  - Cero mutación de cantidades o reservas: no calcula availability agregada ni invoca `_action_assign()`.
+  - Rendimiento anti-N+1: Exactamente 1 búsqueda ORM amplia sobre `wms.inventory.block` para todo el batch y matching exacto en memoria.
+  - Cero persistencia: `wms.inventory.block` no almacena `quant_id` ni crea tablas de mapeo.
+- **Motor de Disponibilidad Agregada con Bloqueos (INV-006)**:
+  - `get_aggregate_unblocked_available_quantity(...)`: Calcula la disponibilidad física agregada en todo el subárbol de una ubicación raíz (`strict=False`).
+  - Descubrimiento nativo con company scoping: `_gather(..., strict=False)` con `allowed_company_ids=[company_id.id]`.
+  - Filtrado batch: Aplica `get_blocked_quants(...)` (1 sola llamada) y excluye los quants bloqueados.
+  - Aritmética nativa Odoo 19: Preserva la lógica de productos untracked (`sum(qty) - sum(res)` con tolerancia UoM) y tracked (agrupación por lote sumando solo grupos positivos).
+  - Invariante de monotonicidad: `result = min(native_scoped_available, unblocked_available)`, garantizando que bloquear un quant (incluso con saldo negativo) jamás incremente la disponibilidad.
+  - Cero llamadas a `_get_available_quantity()` en producción, cero mutación de reservas y cero integración de allocation/location-roles (diferidos).
 
 ---
 
@@ -56,12 +58,13 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 | **INV-001** | Bootstrap WMS Inventory Core (Scaffold & Dependencies) | ✅ Merged |
 | **INV-002** | Operational Inventory Block Core (`wms.inventory.block`) | ✅ Merged |
 | **INV-003** | Operational Block Matching Query API (Single Candidate) | ✅ Merged |
-| **INV-004** | Operational Block Availability Guard (Single Candidate) | ✅ Merged |
-| **INV-005** | Operational Block Batch Matching API (`get_blocked_quants`) | ✅ Current |
-| **INV-006+** | Aggregate Block-Aware Availability Engine (Diferido) | ⏸ Siguiente |
-| **INV-007+** | Operational Event Journal (`wms.inventory.event`) | ⏸ Diferido |
-| **INV-008+** | Audit Log (`wms.audit.log`) | ⏸ Diferido |
-| **INV-009+** | Integration Outbox (`wms.outbox`) | ⏸ Diferido |
+| **INV-004** | Operational Block Availability Guard (Single Candidate, `strict=True`) | ✅ Merged |
+| **INV-005** | Operational Block Batch Matching API (`get_blocked_quants`) | ✅ Merged |
+| **INV-006** | Aggregate Block-Aware Availability Engine (`strict=False`) | ✅ Current |
+| **INV-007+** | Location-Role Operational Eligibility & Allocation Integration (Diferido) | ⏸ Siguiente |
+| **INV-008+** | Operational Event Journal (`wms.inventory.event`) | ⏸ Diferido |
+| **INV-009+** | Audit Log (`wms.audit.log`) | ⏸ Diferido |
+| **INV-010+** | Integration Outbox (`wms.outbox`) | ⏸ Diferido |
 
 ---
 

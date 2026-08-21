@@ -183,7 +183,17 @@ Para bloqueos lógicos que no implican movimiento físico (ej: inventario bloque
 - **Invariantes Arquitectónicos**:
   - **Cero Persistencia**: `wms.inventory.block` no almacena `quant_id` ni crea tablas intermedias; `stock.quant` se usa transitoriamente como candidato de consulta.
   - **Seguridad**: Aplica `check_access("read")` antes de procesar el lote y valida coherencia de compañía en cada quant (`location_id.company_id`).
-  - **Frontera Funcional**: No calcula disponibilidad agregada ni altera reservas nativas (`_action_assign()`); sirve como base optimizada para motores posteriores de disponibilidad y allocation.
+
+#### 7. Disponibilidad Agregada Block-Aware (INV-006)
+- **Cálculo en Subárbol (`strict=False`)**:
+  - `get_aggregate_unblocked_available_quantity(company_id, product_id, location_id, lot_id=False, package_id=False, owner_id=False)`: Calcula la disponibilidad agregada en el subárbol de una ubicación raíz aplicando el filtro de bloqueos operacionales.
+  - **Descubrimiento y Scoping de Quants**: Consulta nativa `_gather(product_id, location_id, ..., strict=False)` restringida mediante contexto `allowed_company_ids=[company_id.id]`.
+  - **Filtrado Batch**: Aplica `get_blocked_quants(company_id, candidate_quants)` en una sola llamada y excluye los quants bloqueados.
+  - **Aritmética Nativa de Odoo 19**:
+    - *Untracked*: `sum(quantity) - sum(reserved_quantity)` con validación de tolerancia `uom_id.compare(total, 0.0) >= 0`.
+    - *Tracked*: Agrupación por lote/untracked, sumando únicamente grupos positivos (`uom_id.compare > 0`).
+  - **Invariante de Monotonicidad**: `result = min(native_scoped_available, unblocked_available)`. Bloquear un quant (incluyendo saldos negativos) jamás puede incrementar la disponibilidad agregada sobre la cantidad nativa de partida.
+  - **Frontera de Dominio**: No calcula elegibilidad de roles semánticos (`wms_location_role`), ni muta inventario ni interviene en reservas (`_action_assign()`); sirve de base para el futuro motor de asignación/allocation.
 
 ---
 
