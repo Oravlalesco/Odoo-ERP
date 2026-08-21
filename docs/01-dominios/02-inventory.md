@@ -115,44 +115,42 @@ Quality release:
   → De vuelta a disponible
 ```
 
-### Bloqueo Operacional (`wms.inventory.block`) — v1.2
+### Bloqueo Operacional (`wms.inventory.block`) — INV-002
 
-Para bloqueos que no implican movimiento físico (ej: inventario bloqueado durante conteo):
+Para bloqueos lógicos que no implican movimiento físico (ej: inventario bloqueado durante conteo, investigación de calidad o retención aduanera):
 
-> ⚠️ La v1.1 usaba `quant_id` como referencia del bloqueo. Esto es frágil porque `stock.quant` es una representación técnica que Odoo puede mergear, crear y eliminar durante la gestión de inventario. Un bloqueo debe referenciar **dimensiones lógicas**, no IDs de registros técnicos.
+> [!NOTE]
+> `stock.quant` es una representación técnica que Odoo puede fusionar, crear y eliminar durante la operativa. Un bloqueo operacional en WMS referencia **dimensiones lógicas** (`location_id`, `product_id`, `lot_id`, `package_id`, `owner_id`), nunca `quant_id`.
 
-| Campo | Significado |
-|---|---|
-| `block_scope` | Scope: `LOCATION`, `PRODUCT_LOCATION`, `LOT`, `PACKAGE`, `OWNER_LOCATION` |
-| `product_id` | Producto (si aplica al scope) |
-| `location_id` | Ubicación (si aplica al scope) |
-| `lot_id` | Lote (si aplica al scope) |
-| `package_id` | Package/HU (si aplica al scope) |
-| `owner_id` | Propietario (si aplica al scope) |
-| `block_type` | Tipo: `CYCLE_COUNT`, `INVESTIGATION`, `HOLD`, `CUSTOMS` |
-| `reason` | Motivo del bloqueo |
-| `blocked_by` | Usuario que bloqueó |
-| `blocked_at` | Timestamp |
-| `released_at` | Timestamp de liberación (null = activo) |
+#### 1. Campos Funcionales (Exactamente 12)
+| Campo | Tipo | Significado | Contrato |
+|---|---|---|---|
+| `company_id` | Many2one (`res.company`) | Compañía propietaria del bloqueo | Requerido, default compañía actual, restrict, index |
+| `block_scope` | Selection | Alcance del bloqueo | `LOCATION`, `PRODUCT_LOCATION`, `LOT`, `PACKAGE`, `OWNER_LOCATION` |
+| `product_id` | Many2one (`product.product`) | Producto afectado | Opcional, restrict, check_company=True, index |
+| `location_id` | Many2one (`stock.location`) | Ubicación afectada | Opcional, restrict, check_company=True, index |
+| `lot_id` | Many2one (`stock.lot`) | Lote afectado | Opcional, restrict, check_company=True, index |
+| `package_id` | Many2one (`stock.package`) | Paquete / HU afectado | Opcional, restrict, check_company=True, index |
+| `owner_id` | Many2one (`res.partner`) | Propietario (3PL) afectado | Opcional, restrict, index |
+| `block_type` | Selection | Tipo de bloqueo operacional | `CYCLE_COUNT`, `INVESTIGATION`, `HOLD`, `CUSTOMS` |
+| `reason` | Text | Motivo documentado del bloqueo | Requerido |
+| `blocked_by` | Many2one (`res.users`) | Usuario que originó el bloqueo | Requerido, readonly, server-owned, restrict, index |
+| `blocked_at` | Datetime | Fecha/hora del bloqueo | Requerido, readonly, server-owned, index |
+| `released_at` | Datetime | Fecha/hora de liberación | Readonly, index (`False` = activo) |
 
-Ejemplo — bloquear todo el inventario de una ubicación durante conteo cíclico:
+#### 2. Matriz de Scopes y Dimensiones Requeridas (DB CHECK)
+- `LOCATION`: Exige `location_id`; las demás dimensiones deben ser nulas.
+- `PRODUCT_LOCATION`: Exige `product_id` y `location_id`; las demás dimensiones deben ser nulas.
+- `LOT`: Exige `product_id` y `lot_id` (con invariante `product_id == lot_id.product_id`); las demás nulas.
+- `PACKAGE`: Exige `package_id`; las demás dimensiones deben ser nulas.
+- `OWNER_LOCATION`: Exige `owner_id` y `location_id`; las demás dimensiones deben ser nulas.
 
-```text
-block_scope = LOCATION
-location_id = A03-R02-L04
-block_type = CYCLE_COUNT
-```
-
-Ejemplo — bloquear un lote específico por investigación de calidad:
-
-```text
-block_scope = LOT
-lot_id = L00231
-product_id = SKU-A
-block_type = INVESTIGATION
-```
-
-El Allocation Engine **consulta** `wms.inventory.block` antes de asignar inventario.
+#### 3. Inmutabilidad y Ciclo de Vida
+- **Creación**: `create()` establece automáticamente `blocked_by=env.user`, `blocked_at=now()` y `released_at=False`.
+- **Inmutabilidad**: Edición directa (`write()`) y eliminación (`unlink()`) están estrictamente prohibidas (`UserError`).
+- **Liberación**: Se ejecuta únicamente mediante `action_release()`, autorizada para Supervisor WMS o System Admin, registrando `released_at = now()` con constraint `released_at >= blocked_at`.
+- **Multi-compañía**: Controlado por `check_company=True` en dimensiones físicas y regla global `[('company_id', 'in', company_ids)]`.
+- **Disponibilidad/Allocation**: El consumo y filtrado de estos bloqueos en los motores de asignación y cálculo de disponibilidad queda diferido a las tareas correspondientes.
 
 ---
 

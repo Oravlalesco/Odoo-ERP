@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         INV-002: WMS Inventory Block Multi-Company Record Rule
+         ============================================================ -->
+
+    <record id="rule_wms_inventory_block_company" model="ir.rule">
+        <field name="name">WMS Inventory Block: multi-company</field>
+        <field name="model_id" ref="model_wms_inventory_block"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
+</odoo>

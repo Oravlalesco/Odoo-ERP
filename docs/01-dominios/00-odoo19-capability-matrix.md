@@ -87,7 +87,7 @@ Alternativas para implementar estados operacionales WMS:
 | Quality Hold | Mover a ubicación tipo `QUALITY_HOLD` o marcar el lote | `stock.location` (tipo) o `stock.lot` (campo) |
 | Quarantine | Mover a ubicación tipo `QUARANTINE` | `stock.location` (tipo) |
 | Damage | Mover a ubicación tipo `DAMAGE` | `stock.location` (tipo) |
-| Operational Block | WMS availability policy: model `wms.inventory.block` | Modelo nuevo WMS |
+| Operational Block | Bloqueo lógico por dimensiones (`wms.inventory.block`). Persistencia y RBAC en INV-002; disponibilidad diferida. | 🆕 Crear WMS |
 | Reservation Context | `stock.move` / `stock.move.line` / `wms.allocation` | Modelos existentes + nuevo |
 
 Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) en vez de luchar contra ella.
