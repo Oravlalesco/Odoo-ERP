@@ -564,5 +564,116 @@ class WmsInventoryBlock(models.Model):
 
         return blocked_quants
 
+    # ------------------------------------------------------------------
+    # DISPONIBILIDAD AGREGADA CON BLOQUEOS OPERACIONALES (INV-006)
+    # ------------------------------------------------------------------
+
+    @api.model
+    def get_aggregate_unblocked_available_quantity(
+        self,
+        company_id,
+        product_id,
+        location_id,
+        lot_id=False,
+        package_id=False,
+        owner_id=False,
+    ):
+        """Calcular la disponibilidad física agregada en el subárbol de una ubicación aplicando bloqueos.
+
+        Descubre quants en el subárbol (strict=False) con restricción de compañía (allowed_company_ids),
+        filtra candidatos bloqueados mediante get_blocked_quants() (INV-005) y calcula la disponibilidad
+        reproduciendo la aritmética nativa de Odoo 19 (tracked agrupado por lote, untracked con precisión UoM),
+        garantizando monotonicidad (un bloqueo nunca puede incrementar la disponibilidad).
+
+        :param company_id: Recordset singleton de res.company (requerido).
+        :param product_id: Recordset singleton de product.product (requerido).
+        :param location_id: Recordset singleton de stock.location (requerido).
+        :param lot_id: Recordset singleton de stock.lot o False (opcional).
+        :param package_id: Recordset singleton de stock.package o False (opcional).
+        :param owner_id: Recordset singleton de res.partner o False (opcional).
+        :return: float con la disponibilidad agregada neta utilizable.
+        """
+        # 1. Validación de argumentos y singletons
+        if not company_id or not hasattr(company_id, "_name") or company_id._name != "res.company":
+            raise ValueError("company_id debe ser un recordset singleton de res.company.")
+        company_id.ensure_one()
+
+        if not product_id or not hasattr(product_id, "_name") or product_id._name != "product.product":
+            raise ValueError("product_id debe ser un recordset singleton de product.product.")
+        product_id.ensure_one()
+
+        if not location_id or not hasattr(location_id, "_name") or location_id._name != "stock.location":
+            raise ValueError("location_id debe ser un recordset singleton de stock.location.")
+        location_id.ensure_one()
+
+        if lot_id and (not hasattr(lot_id, "_name") or lot_id._name != "stock.lot"):
+            raise ValueError("lot_id debe ser un recordset singleton de stock.lot o False.")
+        if lot_id:
+            lot_id.ensure_one()
+
+        if package_id and (not hasattr(package_id, "_name") or package_id._name != "stock.package"):
+            raise ValueError("package_id debe ser un recordset singleton de stock.package o False.")
+        if package_id:
+            package_id.ensure_one()
+
+        if owner_id and (not hasattr(owner_id, "_name") or owner_id._name != "res.partner"):
+            raise ValueError("owner_id debe ser un recordset singleton de res.partner o False.")
+        if owner_id:
+            owner_id.ensure_one()
+
+        # 2. Validación explícita de permisos de lectura (ACL)
+        self.check_access("read")
+
+        # 3. Validación de autorización de compañía
+        if company_id.id not in self.env.companies.ids:
+            raise AccessError("No tiene acceso a la compañía especificada.")
+
+        # 4. Validación de coherencia de compañía con la ubicación raíz
+        if location_id.company_id and location_id.company_id != company_id:
+            raise AccessError("La ubicación pertenece a una compañía distinta a la especificada.")
+
+        # 5. Descubrimiento de quants nativos con contexto de compañía restringido y strict=False
+        candidate_quants = self.env["stock.quant"].with_context(
+            allowed_company_ids=[company_id.id]
+        )._gather(
+            product_id,
+            location_id,
+            lot_id=lot_id or None,
+            package_id=package_id or None,
+            owner_id=owner_id or None,
+            strict=False,
+        )
+
+        # 6. Filtrado batch de quants bloqueados (INV-005)
+        blocked_quants = self.get_blocked_quants(company_id, candidate_quants)
+        unblocked_quants = candidate_quants - blocked_quants
+
+        # 7. Cálculo de disponibilidad con aritmética nativa de Odoo 19
+        def _compute_available(quants_subset):
+            if not quants_subset:
+                return 0.0
+            if product_id.tracking == "none":
+                total = sum(quants_subset.mapped("quantity")) - sum(quants_subset.mapped("reserved_quantity"))
+                return total if product_id.uom_id.compare(total, 0.0) >= 0 else 0.0
+            else:
+                available_quantities = {l: 0.0 for l in list(set(quants_subset.mapped("lot_id"))) + ["untracked"]}
+                for q in quants_subset:
+                    if not q.lot_id:
+                        available_quantities["untracked"] += q.quantity - q.reserved_quantity
+                    else:
+                        available_quantities[q.lot_id] += q.quantity - q.reserved_quantity
+                return sum(
+                    qty for qty in available_quantities.values()
+                    if product_id.uom_id.compare(qty, 0.0) > 0
+                )
+
+        native_scoped_available = _compute_available(candidate_quants)
+        unblocked_available = _compute_available(unblocked_quants)
+
+        # 8. Invariante de monotonicidad: un bloqueo nunca incrementa la disponibilidad
+        result = min(native_scoped_available, unblocked_available)
+        return float(result)
+
+
 
 
