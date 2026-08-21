@@ -333,3 +333,60 @@ class WmsInventoryBlock(models.Model):
         )
         return bool(self.search_count(domain, limit=1))
 
+    # ------------------------------------------------------------------
+    # GUARDIA DE DISPONIBILIDAD OPERACIONAL (INV-004)
+    # ------------------------------------------------------------------
+
+    @api.model
+    def get_unblocked_available_quantity(
+        self,
+        company_id,
+        product_id,
+        location_id,
+        lot_id=False,
+        package_id=False,
+        owner_id=False,
+    ):
+        """Calcular la cantidad disponible utilizable por el WMS para un candidato lógico exacto.
+
+        Aplica la guardia de bloqueos operacionales sobre la disponibilidad nativa de Odoo:
+        1. Consulta is_blocked() primero: si existe un bloqueo activo -> retorna 0.0 inmediatamente (short-circuit).
+        2. Si no está bloqueado, valida coherencia de compañía entre el candidato y la ubicación.
+        3. Consulta la disponibilidad nativa de Odoo con strict=True y allow_negative=False.
+
+        :param company_id: Recordset singleton de res.company (requerido).
+        :param product_id: Recordset singleton de product.product (requerido).
+        :param location_id: Recordset singleton de stock.location (requerido).
+        :param lot_id: Recordset singleton de stock.lot o False (opcional).
+        :param package_id: Recordset singleton de stock.package o False (opcional).
+        :param owner_id: Recordset singleton de res.partner o False (opcional).
+        :return: float con la cantidad disponible utilizable.
+        """
+        # 1. Guardia de bloqueo operacional (valida parámetros y autorización de compañía)
+        if self.is_blocked(
+            company_id,
+            product_id,
+            location_id,
+            lot_id=lot_id,
+            package_id=package_id,
+            owner_id=owner_id,
+        ):
+            return 0.0
+
+        # 2. Validación de coherencia de compañía con la ubicación (location_id.company_id)
+        if location_id.company_id and location_id.company_id != company_id:
+            raise AccessError("La ubicación pertenece a una compañía distinta a la especificada.")
+
+        # 3. Consulta de disponibilidad nativa de candidato exacto (strict=True)
+        native_qty = self.env["stock.quant"]._get_available_quantity(
+            product_id,
+            location_id,
+            lot_id=lot_id or None,
+            package_id=package_id or None,
+            owner_id=owner_id or None,
+            strict=True,
+            allow_negative=False,
+        )
+        return float(native_qty)
+
+
