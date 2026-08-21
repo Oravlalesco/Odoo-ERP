@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         HU-003A: WMS SSCC Sequence Multi-Company Record Rule
+         ============================================================ -->
+
+    <record id="rule_wms_sscc_sequence_company" model="ir.rule">
+        <field name="name">WMS SSCC Sequence: multi-company</field>
+        <field name="model_id" ref="model_wms_sscc_sequence"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
+</odoo>

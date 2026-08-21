@@ -1,0 +1,5 @@
+id,name,model_id/id,group_id/id,perm_read,perm_write,perm_create,perm_unlink
+access_wms_sscc_sequence_operator,wms.sscc.sequence.operator,model_wms_sscc_sequence,wms_core.group_wms_operator,1,0,0,0
+access_wms_sscc_sequence_supervisor,wms.sscc.sequence.supervisor,model_wms_sscc_sequence,wms_core.group_wms_supervisor,1,0,0,0
+access_wms_sscc_sequence_manager,wms.sscc.sequence.manager,model_wms_sscc_sequence,wms_core.group_wms_manager,1,1,1,1
+access_wms_sscc_sequence_system,wms.sscc.sequence.system,model_wms_sscc_sequence,base.group_system,1,1,1,1

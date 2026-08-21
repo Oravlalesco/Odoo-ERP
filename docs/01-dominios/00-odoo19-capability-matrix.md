@@ -140,6 +140,7 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | `pack_date` | ✅ Reutilizar | **Ya existe** — fecha de empaque |
 | `quant_ids` | ✅ Reutilizar | **Ya existe** — contenido (relación a quants) |
 | `valid_sscc` | ✅ Reutilizar | **Ya existe** — campo computed `_compute_valid_sscc()` con encoder SSCC; `name` se usa como referencia SSCC |
+| SSCC-18 Allocator (`wms.sscc.sequence`) | 🔧 HU-003A | Modelo asignador GS1 SSCC-18 sobre `ir.sequence` transaccional (`next_sscc()`) |
 | HU lifecycle (`hu_state`) | 🔧 HU-002 | Metadata persistida (`EMPTY..DISPOSED`, nullable); motor de transiciones diferido |
 | `seal_number` | ⏸ Diferido | Número de sello (diferido) |
 | `hu_class` | 🔧 HU-002 | Clasificación operacional (`PALLET`, `CASE`, `TOTE`, `CONTAINER`, `MIXED`) |
