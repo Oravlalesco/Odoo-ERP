@@ -22,23 +22,33 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 - `wms_location_role` (aportado y gestionado por `wms_warehouse_master`) define la semántica operativa por ubicación (recepción, staging, picking, putaway, calidad, packing, despacho).
 - El campo nativo `stock.location.usage` **no se extiende** con valores personalizados (ADR-026).
 
-### 4. Scaffold Inicial (INV-001)
-- **Estado actual**: **INV-001 — Bootstrap WMS Inventory Core**.
-- Esta etapa inicial establece exclusivamente el scaffold del módulo, declarando dependencias con `wms_core`, `wms_warehouse_master` y `stock`, sin introducir modelos de datos ni modificaciones sobre tablas estándar.
+### 4. Bloqueos Operacionales de Inventario (`wms.inventory.block`)
+- **Estado actual**: **INV-002 — Operational Inventory Block Core**.
+- Registro lógico inmutable de bloqueo sobre dimensiones operacionales:
+  - `LOCATION`: Bloqueo de ubicación completa (`location_id`).
+  - `PRODUCT_LOCATION`: Bloqueo de producto en ubicación (`product_id`, `location_id`).
+  - `LOT`: Bloqueo de lote específico (`product_id`, `lot_id`, con validación `product_id == lot_id.product_id`).
+  - `PACKAGE`: Bloqueo de paquete / HU (`package_id`).
+  - `OWNER_LOCATION`: Bloqueo de inventario consignado por propietario en ubicación (`owner_id`, `location_id`).
+- **Tipos de bloqueo**: `CYCLE_COUNT` (Conteo cíclico), `INVESTIGATION` (Investigación), `HOLD` (Retención operacional), `CUSTOMS` (Aduana).
+- **Inmutabilidad y ciclo de vida**:
+  - `create()` impone server-side `blocked_by=env.user`, `blocked_at=now()`, `released_at=False`.
+  - Edición directa (`write()`) y borrado (`unlink()`) estrictamente prohibidos (`UserError`).
+  - Única mutación válida: `action_release()`, restringida a Supervisor WMS o System Admin, estableciendo `released_at=now()` con DB CHECK `released_at >= blocked_at`.
+- **Multi-compañía**: `check_company=True` en dimensiones físicas y regla de registro global `[('company_id', 'in', company_ids)]`.
 
 ---
 
-## Capacidades Funcionales Diferidas (Tareas Posteriores)
+## Hoja de Ruta del Dominio de Inventario
 
-Las siguientes capacidades forman parte del diseño del dominio de inventario pero quedan diferidas a tareas posteriores:
-
-| Capacidad | Descripción | Estado |
+| Tarea | Capacidad | Estado |
 |---|---|---|
-| **Operational Block** (`wms.inventory.block`) | Bloqueos operacionales sobre dimensiones lógicas de inventario. El contrato de scopes se define en una tarea posterior. | ⏸ Diferido (INV-002+) |
-| **Operational Event Journal** (`wms.inventory.event`) | Registro inmutable de eventos operacionales WMS. | ⏸ Diferido |
-| **Audit Log** (`wms.audit.log`) | Trazabilidad y auditoría de mutaciones operativas. | ⏸ Diferido |
-| **Integration Outbox** (`wms.outbox`) | Patrón Outbox transaccional para mensajería asíncrona hacia ERP/TMS. | ⏸ Diferido |
-| **Políticas de Disponibilidad** | Motores y reglas de cálculo de disponibilidad de inventario. | ⏸ Diferido |
+| **INV-001** | Bootstrap WMS Inventory Core (Scaffold & Dependencies) | ✅ Merged |
+| **INV-002** | Operational Inventory Block Core (`wms.inventory.block`) | ✅ Current |
+| **INV-003+** | Availability Engine & Block Matching (Diferido) | ⏸ Siguiente |
+| **INV-004+** | Operational Event Journal (`wms.inventory.event`) | ⏸ Diferido |
+| **INV-005+** | Audit Log (`wms.audit.log`) | ⏸ Diferido |
+| **INV-006+** | Integration Outbox (`wms.outbox`) | ⏸ Diferido |
 
 ---
 

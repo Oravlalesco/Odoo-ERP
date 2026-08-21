@@ -1,0 +1,5 @@
+id,name,model_id/id,group_id/id,perm_read,perm_write,perm_create,perm_unlink
+access_wms_inventory_block_operator,wms.inventory.block.operator,model_wms_inventory_block,wms_core.group_wms_operator,1,0,0,0
+access_wms_inventory_block_supervisor,wms.inventory.block.supervisor,model_wms_inventory_block,wms_core.group_wms_supervisor,1,1,1,0
+access_wms_inventory_block_manager,wms.inventory.block.manager,model_wms_inventory_block,wms_core.group_wms_manager,1,1,1,0
+access_wms_inventory_block_system,wms.inventory.block.system,model_wms_inventory_block,base.group_system,1,1,1,0
