@@ -15,7 +15,7 @@ class TestAdministrativeViews(TransactionCase):
     - Opciones de seguridad en los 6 campos relacionales configurables (no_create, no_quick_create).
     - Contrato de search view (7 search fields, exactamente 2 filtros directos, exactamente 4 agrupadores con context).
     - Contrato de acción de ventana (res_model, view_mode, search_view_id).
-    - Ausencia total de campos diferidos de estrategia (PLM-006B) y ausencia de menús registrados.
+    - Ausencia total de campos diferidos de estrategia (PLM-006B) y ausencia de etiquetas menuitem en vistas.
     """
 
     @classmethod
@@ -280,11 +280,11 @@ class TestAdministrativeViews(TransactionCase):
         self.assertTrue(self.action.help, "Action help text must not be empty")
 
     # ------------------------------------------------------------------
-    # TEST-PLM-067: Deferred Strategy Fields Absent & No ir.ui.menu
+    # TEST-PLM-067: Deferred Strategy Fields Absent
     # ------------------------------------------------------------------
 
     def test_plm_067_deferred_strategy_fields_absent(self):
-        """PLM-007A-067: Los campos diferidos (PLM-006B) no están en vistas y no existe ningún ir.ui.menu en el módulo."""
+        """PLM-007A-067: Los campos diferidos (PLM-006B) y etiquetas menuitem no están presentes en los arch de las vistas."""
         deferred_fields = {
             "storage_profile",
             "putaway_profile",
@@ -310,13 +310,3 @@ class TestAdministrativeViews(TransactionCase):
                 f"No <menuitem> elements allowed in {view_name} view arch",
             )
 
-        # Boundary protection: no ir.ui.menu registrado por wms_product_logistics en ir.model.data
-        menu_count = self.env["ir.model.data"].search_count([
-            ("module", "=", "wms_product_logistics"),
-            ("model", "=", "ir.ui.menu"),
-        ])
-        self.assertEqual(
-            menu_count,
-            0,
-            "Module wms_product_logistics must not declare any ir.ui.menu records in PLM-007A",
-        )

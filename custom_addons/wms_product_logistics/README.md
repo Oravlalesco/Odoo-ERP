@@ -18,7 +18,7 @@ It defines the operational and logistical characteristics of products required b
 - Domain strategy profiles (Storage, Putaway, Replenishment, Allocation).
 - Quality inspection triggers and sampling rules.
 
-> **Current Status**: **PLM-007A — Administrative Views Foundation**. Vistas administrativas (`list`, `form`, `search`) y acción de ventana (`action_wms_product_logistics`) implementadas para `wms.product.logistics`. Menús y navegación diferidos a PLM-007B e integración con producto a PLM-007C.
+> **Current Status**: **PLM-007B — Navigation & RBAC Exposure**. Exposición de navegación WMS (`WMS` > `Maestros` > `Perfiles logísticos`) con control de acceso por roles WMS (Operator/Supervisor: Read-Only, Manager/System Admin: CRUD, Plain Internal: Oculto). Integración contextual con producto diferida a PLM-007C.
 
 ---
 
@@ -109,6 +109,17 @@ product.template (Odoo) ◄─── (1:0..1) ───► wms.product.logistics
 - `view_wms_product_logistics_search`: búsqueda por producto, compañía y clasificaciones, filtros de archivados/calidad y agrupadores.
 - `action_wms_product_logistics`: acción de ventana para gestión del modelo.
 
+**Navegación & RBAC (PLM-007B):**
+- Jerarquía de menús WMS:
+  - `wms_core.menu_wms_root` (WMS, sequence=145, propiedad de `wms_core`)
+    └── `wms_product_logistics.menu_wms_master_data` (Maestros, sequence=10)
+        └── `wms_product_logistics.menu_wms_product_logistics` (Perfiles logísticos, action=`action_wms_product_logistics`)
+- Matriz de visibilidad y acceso:
+  - **Operator / Supervisor**: menús visibles, acceso estrictamente Read-Only al modelo.
+  - **Manager / System Admin**: menús visibles, acceso CRUD completo.
+  - **Plain Internal User** (`base.group_user`): menús ocultos, lectura denegada (`AccessError`).
+  - **Sin escalación a Stock**: ningún rol WMS hereda grupos de inventario nativo (`stock.group_stock_*`).
+
 - **Odoo 19 Reutilization**:
   - `stock.package` = Instancia física del HU.
   - `stock.package.type` = Catálogo oficial de tipos (dimensiones, peso tara/máximo, `package_use`).
@@ -137,9 +148,9 @@ All items below represent future development stages:
 | **PLM-005B** | HU Type Restrictions (`allowed_hu_type_ids`, `default_hu_type_id`) | ✅ Merged |
 | **PLM-006A** | Quality Inspection Policy Master (`requires_quality_inspection`, `type`, `rate`) | ✅ Merged |
 | **PLM-006B** | Strategy Profile Bindings (`storage`, `putaway`, `replenishment`, `allocation`) | ⏸ Deferred |
-| **PLM-007A** | Administrative Views Foundation (`list`, `form`, `search`, `action`) | ✅ Current |
-| **PLM-007B** | Navigation & RBAC Exposure (Menus & Access) | ⏳ Next |
-| **PLM-007C** | Product Template Integration (Contextual Action from Product) | ⏳ Future |
+| **PLM-007A** | Administrative Views Foundation (`list`, `form`, `search`, `action`) | ✅ Merged |
+| **PLM-007B** | Navigation & RBAC Exposure (Menus & Access) | ✅ Current |
+| **PLM-007C** | Product Template Integration (Contextual Action from Product) | ⏳ Next |
 
 ---
 

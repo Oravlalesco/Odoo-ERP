@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         PLM-007B: Product Logistics Navigation Menus
+         Maestros -> Perfiles logísticos
+         ============================================================ -->
+
+    <!-- Menú intermedio de Maestros WMS -->
+    <menuitem id="menu_wms_master_data"
+              name="Maestros"
+              parent="wms_core.menu_wms_root"
+              sequence="10"
+              groups="wms_core.group_wms_operator,base.group_system"/>
+
+    <!-- Menú hoja para Perfiles Logísticos -->
+    <menuitem id="menu_wms_product_logistics"
+              name="Perfiles logísticos"
+              parent="menu_wms_master_data"
+              action="action_wms_product_logistics"
+              sequence="10"
+              groups="wms_core.group_wms_operator,base.group_system"/>
+
+</odoo>
