@@ -4,7 +4,7 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 
 ---
 
-## Propósito y Límites Arquitectónicos (Fase 5 — Inventory Core / ADR-001, ADR-011, ADR-012, ADR-026)
+## Propósito y Límites Arquitectónicos (Fase 5 — Inventory Core / ADR-001, ADR-011, ADR-012, ADR-019, ADR-026)
 
 `wms_inventory` implementa el **Dominio de Inventario** del Kernel WMS.
 
@@ -22,8 +22,7 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 - `wms_location_role` (aportado y gestionado por `wms_warehouse_master`) define la semántica operativa por ubicación (recepción, staging, picking, putaway, calidad, packing, despacho).
 - El campo nativo `stock.location.usage` **no se extiende** con valores personalizados (ADR-026).
 
-### 4. Bloqueos Operacionales y Disponibilidad WMS (`wms.inventory.block`)
-- **Estado actual**: **INV-006 — Aggregate Block-Aware Availability Engine**.
+### 4. Bloqueos Operacionales y Disponibilidad WMS (`wms.inventory.block` — INV-002..INV-006)
 - **Persistencia (INV-002)**:
   - Scopes: `LOCATION`, `PRODUCT_LOCATION`, `LOT`, `PACKAGE`, `OWNER_LOCATION`.
   - Tipos: `CYCLE_COUNT`, `INVESTIGATION`, `HOLD`, `CUSTOMS`.
@@ -47,7 +46,20 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
   - Filtrado batch: Aplica `get_blocked_quants(...)` (1 sola llamada) y excluye los quants bloqueados.
   - Aritmética nativa Odoo 19: Preserva la lógica de productos untracked (`sum(qty) - sum(res)` con tolerancia UoM) y tracked (agrupación por lote sumando solo grupos positivos).
   - Invariante de monotonicidad: `result = min(native_scoped_available, unblocked_available)`, garantizando que bloquear un quant (incluso con saldo negativo) jamás incremente la disponibilidad.
-  - Cero llamadas a `_get_available_quantity()` en producción, cero mutación de reservas y cero integración de allocation/location-roles (diferidos).
+
+### 5. Journal Operacional de Inventario (`wms.inventory.event` — INV-008)
+- **Persistencia Append-Only**:
+  - Exactamente 13 campos funcionales: `company_id`, `occurred_at`, `event_type`, `product_id`, `lot_id`, `package_id`, `owner_id`, `source_location_id`, `dest_location_id`, `quantity`, `operator_id`, `warehouse_id`, `correlation_id`.
+  - Catálogo inicial exacto de 7 `event_type`: `RECEIVE`, `MOVE`, `RELEASE`, `PUTAWAY`, `PICK`, `PACK`, `UNPACK`.
+  - Cantidad normalizada a `product_id.uom_id` con DB CHECK `quantity > 0`.
+  - Invariante de integridad: `lot_id.product_id == product_id`.
+  - `package_id` referencia directamente `stock.package` (Handling Unit física según ADR-013).
+  - Inmutabilidad server-side: `create()` directo, `write()` y `unlink()` bloqueados con `UserError`.
+- **API Privada de Inserción Batch**:
+  - `_append_events(vals_list, correlation_id=None)`: Asigna de forma server-owned `occurred_at` (mismo timestamp para todo el batch), `operator_id` (`env.user`) y `correlation_id` (UUID4 común o explícito), ejecutando una única creación multi-record ORM.
+- **Límites de ADR-019**:
+  - INV-008 crea la persistencia append-only del journal, pero **ADR-019 todavía no se considera satisfecho** hasta que exista el Outbox (INV-010) y el boundary de mutación cree Event + Outbox dentro de la misma transacción.
+  - Cero hooks automáticos sobre `stock.quant` o `stock.move`. Los eventos se emitirán desde comandos operacionales WMS explícitos.
 
 ---
 
@@ -60,11 +72,11 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 | **INV-003** | Operational Block Matching Query API (Single Candidate) | ✅ Merged |
 | **INV-004** | Operational Block Availability Guard (Single Candidate, `strict=True`) | ✅ Merged |
 | **INV-005** | Operational Block Batch Matching API (`get_blocked_quants`) | ✅ Merged |
-| **INV-006** | Aggregate Block-Aware Availability Engine (`strict=False`) | ✅ Current |
-| **INV-007+** | Location-Role Operational Eligibility & Allocation Integration (Diferido) | ⏸ Siguiente |
-| **INV-008+** | Operational Event Journal (`wms.inventory.event`) | ⏸ Diferido |
-| **INV-009+** | Audit Log (`wms.audit.log`) | ⏸ Diferido |
-| **INV-010+** | Integration Outbox (`wms.outbox`) | ⏸ Diferido |
+| **INV-006** | Aggregate Block-Aware Availability Engine (`strict=False`) | ✅ Merged |
+| **INV-007** | Location-Role Operational Eligibility & Allocation Integration | ⏸ Diferido |
+| **INV-008** | Operational Event Journal Core (`wms.inventory.event`) | 🔧 Current |
+| **INV-009** | Audit Log (`wms.audit.log`) | ⏸ Diferido |
+| **INV-010** | Integration Outbox (`wms.outbox`) | ⏸ Siguiente Prerrequisito |
 
 ---
 
@@ -72,4 +84,4 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 
 - `wms_core`: Base y framework de seguridad/RBAC del WMS.
 - `wms_warehouse_master`: Autoridad topológica WMS y semántica de ubicaciones (`wms_location_role`).
-- `stock`: Módulo estándar de inventario de Odoo (`stock.quant`, `stock.move`, `stock.move.line`, `stock.location`).
+- `stock`: Módulo estándar de inventario de Odoo (`stock.quant`, `stock.move`, `stock.move.line`, `stock.location`, `stock.package`, `stock.lot`).

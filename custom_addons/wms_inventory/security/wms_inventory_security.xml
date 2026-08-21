@@ -11,4 +11,14 @@
         <field name="domain_force">[('company_id', 'in', company_ids)]</field>
     </record>
 
+    <!-- ============================================================
+         INV-008: Regla de registro multi-compañía para Eventos de Inventario
+         ============================================================ -->
+
+    <record id="rule_wms_inventory_event_company" model="ir.rule">
+        <field name="name">Evento de Inventario WMS: multi-compañía</field>
+        <field name="model_id" ref="model_wms_inventory_event"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
 </odoo>

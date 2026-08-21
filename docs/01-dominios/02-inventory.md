@@ -223,7 +223,7 @@ COMMIT
 
 Si `stock.quant` cambia pero `wms.inventory.event` no se crea, el journal deja de ser reconstruible.
 
-### Ejemplo de Timeline
+### Ejemplo de Timeline (Eventos Soportados en INV-008)
 
 ```text
 12:04  RECEIVE       Supplier → RECEIVING
@@ -232,27 +232,30 @@ Si `stock.quant` cambia pero `wms.inventory.event` no se crea, el journal deja d
 12:22  PUTAWAY       A03 → A03-R02-L04
 16:42  PICK          A03-R02-L04 → CART-12
 16:50  PACK          CART-12 → BOX-993
-17:03  STAGE         BOX-993 → DOCK-04
-17:20  LOAD          DOCK-04 → TRUCK-21
+17:15  UNPACK        BOX-993 → REPACK-01
 ```
 
-### Estructura del Evento
+> *Nota*: Eventos de etapas logísticas posteriores como STAGE, LOAD o SHIP están diferidos a los dominios de despacho/outbound y no forman parte del catálogo inicial de INV-008.
 
-| Campo | Significado |
-|---|---|
-| `timestamp` | Momento exacto con resolución de milisegundos |
-| `event_type` | Tipo de evento (RECEIVE, PICK, etc.) |
-| `product_id` | Producto afectado |
-| `lot_id` | Lote o serial |
-| `hu_id` | Unidad de manejo |
-| `source_location` | Ubicación de origen |
-| `dest_location` | Ubicación de destino |
-| `quantity` | Cantidad |
-| `operator_id` | Operador que ejecutó la acción |
-| `device_id` | Dispositivo RF |
-| `work_id` | Trabajo asociado |
-| `correlation_id` | ID de correlación |
-| `warehouse_id` | Bodega |
+### Estructura del Evento (`wms.inventory.event` — INV-008)
+
+| Campo | Tipo | Significado |
+|---|---|---|
+| `company_id` | Many2one `res.company` | Compañía a la que pertenece el evento |
+| `occurred_at` | Datetime | Momento exacto asignado por el servidor (server-owned) |
+| `event_type` | Selection | Tipo de evento (`RECEIVE`, `MOVE`, `RELEASE`, `PUTAWAY`, `PICK`, `PACK`, `UNPACK`) |
+| `product_id` | Many2one `product.product` | Producto afectado (check_company) |
+| `lot_id` | Many2one `stock.lot` | Lote o serial (debe coincidir con `product_id`) |
+| `package_id` | Many2one `stock.package` | Unidad de manejo física (`stock.package` conforme a ADR-013) |
+| `owner_id` | Many2one `res.partner` | Propietario del inventario |
+| `source_location_id` | Many2one `stock.location` | Ubicación física de origen |
+| `dest_location_id` | Many2one `stock.location` | Ubicación física de destino |
+| `quantity` | Float | Cantidad estrictamente positiva normalizada a `product_id.uom_id` (CHECK > 0) |
+| `operator_id` | Many2one `res.users` | Usuario operacional que ejecutó la acción (server-owned) |
+| `warehouse_id` | Many2one `stock.warehouse` | Almacén asociado al evento |
+| `correlation_id` | Char | Identificador único de correlación / batch UUID4 (server-owned) |
+
+> **Límites de ADR-019**: INV-008 implementa el schema y la API privada append-only `_append_events()`. La garantía atómica de ADR-019 se completará con el Outbox (INV-010) y los comandos operacionales WMS. No se introducen hooks automáticos sobre modelos estándar de Odoo.
 
 ### 2. Audit Log (`wms.audit.log`)
 
