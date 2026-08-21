@@ -22,8 +22,8 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 - `wms_location_role` (aportado y gestionado por `wms_warehouse_master`) define la semántica operativa por ubicación (recepción, staging, picking, putaway, calidad, packing, despacho).
 - El campo nativo `stock.location.usage` **no se extiende** con valores personalizados (ADR-026).
 
-### 4. Bloqueos Operacionales y Matching API (`wms.inventory.block`)
-- **Estado actual**: **INV-003 — Operational Block Matching Query API**.
+### 4. Bloqueos Operacionales y Disponibilidad WMS (`wms.inventory.block`)
+- **Estado actual**: **INV-004 — Operational Block Availability Guard**.
 - **Persistencia (INV-002)**:
   - Scopes: `LOCATION`, `PRODUCT_LOCATION`, `LOT`, `PACKAGE`, `OWNER_LOCATION`.
   - Tipos: `CYCLE_COUNT`, `INVESTIGATION`, `HOLD`, `CUSTOMS`.
@@ -33,7 +33,12 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
   - `get_matching_blocks(...)`: Búsqueda ORM en una sola consulta de todos los bloqueos activos aplicables.
   - `is_blocked(...)`: Verificación booleana ultra rápida con `search_count(limit=1)`.
   - Semántica jerárquica: `LOCATION` y `PACKAGE` cubren ancestros/descendientes (`parent_of`).
-  - Sin alteración de disponibilidad ni reservas nativas de Odoo (`_get_available_quantity()`).
+- **Guardia de Disponibilidad WMS (INV-004)**:
+  - `get_unblocked_available_quantity(...)`: Calcula la cantidad disponible para un candidato exacto aplicando la guardia de bloqueos.
+  - Short-circuit: Si existe bloqueo activo (`is_blocked == True`) -> Retorna `0.0` sin consultar `stock.quant`.
+  - Validación de coherencia: `location_id.company_id` debe coincidir con `company_id` o ser compartida (`False`), de lo contrario lanza `AccessError`.
+  - Si no está bloqueado -> Retorna la disponibilidad nativa calculada con `strict=True` y `allow_negative=False`.
+  - No altera ni sobrescribe métodos de Stock nativos (`_get_available_quantity`, `_get_reserve_quantity`, `_gather`, `_action_assign`).
 
 ---
 
@@ -43,11 +48,12 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 |---|---|---|
 | **INV-001** | Bootstrap WMS Inventory Core (Scaffold & Dependencies) | ✅ Merged |
 | **INV-002** | Operational Inventory Block Core (`wms.inventory.block`) | ✅ Merged |
-| **INV-003** | Operational Block Matching Query API | ✅ Current |
-| **INV-004+** | Availability / Allocation Enforcement (Diferido) | ⏸ Siguiente |
-| **INV-005+** | Operational Event Journal (`wms.inventory.event`) | ⏸ Diferido |
-| **INV-006+** | Audit Log (`wms.audit.log`) | ⏸ Diferido |
-| **INV-007+** | Integration Outbox (`wms.outbox`) | ⏸ Diferido |
+| **INV-003** | Operational Block Matching Query API | ✅ Merged |
+| **INV-004** | Operational Block Availability Guard | ✅ Current |
+| **INV-005+** | Availability / Allocation Enforcement (Diferido) | ⏸ Siguiente |
+| **INV-006+** | Operational Event Journal (`wms.inventory.event`) | ⏸ Diferido |
+| **INV-007+** | Audit Log (`wms.audit.log`) | ⏸ Diferido |
+| **INV-008+** | Integration Outbox (`wms.outbox`) | ⏸ Diferido |
 
 ---
 

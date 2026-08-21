@@ -164,7 +164,17 @@ Para bloqueos lógicos que no implican movimiento físico (ej: inventario bloque
 - **Frontera Arquitectónica**:
   - Consulta de solo lectura sin mutaciones ni caches externas.
   - No altera `_get_available_quantity()` nativo de Odoo ni lógica de reservas.
-  - El consumo y filtrado en motores de disponibilidad y allocation queda diferido a tareas posteriores.
+
+#### 5. Guardia de Disponibilidad Operacional WMS (INV-004)
+- **Cálculo por Candidato Exacto**:
+  - `get_unblocked_available_quantity(company_id, product_id, location_id, lot_id=False, package_id=False, owner_id=False)`: Evalúa disponibilidad física neta de bloqueos para un candidato lógico exacto.
+  - **Filtro de Bloqueo (Short-Circuit)**: Si `is_blocked(...) == True`, retorna inmediatamente `0.0` sin consultar `stock.quant`.
+  - **Coherencia Compañía-Ubicación**: Valida que `location_id.company_id` pertenezca a `company_id` o sea compartida (`False`), lanzando `AccessError` en caso de discrepancia.
+  - **Disponibilidad Nativa Estricta**: Si no hay bloqueos activos, consulta `stock.quant._get_available_quantity(..., strict=True, allow_negative=False)`. `strict=True` previene agregaciones no deseadas de ubicaciones hijas sobre el candidato padre.
+- **Separación de Capas**:
+  - `stock.quant` mantiene la verdad física y de reservas nativas de Odoo.
+  - La disponibilidad WMS aplica la política de bloqueos operacionales sobre la consulta.
+  - La elegibilidad de roles de ubicación (`wms_location_role`), disponibilidad agregada y la integración con reservas y allocation quedan diferidas a fases posteriores.
 
 ---
 
