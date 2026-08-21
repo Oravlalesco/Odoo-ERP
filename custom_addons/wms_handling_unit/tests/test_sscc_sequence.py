@@ -14,7 +14,7 @@ class TestWmsSsccSequence(TransactionCase):
     Valida:
     - TEST-HU-011: Modelo, campos funcionales exactos, ausencia de wms.handling.unit y stock.package.sscc.
     - TEST-HU-012: Validación de GCP (4..12 dígitos, leading zeros, rechazo de inválidos).
-    - TEST-HU-013: Dígito de extensión 0..9 con catálogo exacto, sin default, unicidad (company, GCP, extension).
+    - TEST-HU-013: Dígito de extensión 0..9 con catálogo exacto, sin default, unicidad global (GCP, extension).
     - TEST-HU-014: Generación y estructura de SSCC válido de 18 dígitos verificado con check_barcode_encoding.
     - TEST-HU-015: Longitud de serial según GCP (GCP 4 -> serial 12, GCP 12 -> serial 4, zero-padding).
     - TEST-HU-016: Unicidad secuencial y consumo de exactamente 1 serial por llamada demostrado.
@@ -155,7 +155,7 @@ class TestWmsSsccSequence(TransactionCase):
     # ------------------------------------------------------------------
 
     def test_hu_013_extension_digit_and_namespace_uniqueness(self):
-        """HU-013: extension_digit tiene catálogo exacto '0'..'9', sin default; duplicar (company, GCP, extension) falla."""
+        """HU-013: extension_digit tiene catálogo exacto '0'..'9', sin default; duplicar (GCP, extension) falla en misma compañía y cross-company."""
         field = self.SsccSequence._fields["extension_digit"]
         self.assertEqual(field.type, "selection")
         self.assertTrue(field.required)
@@ -177,14 +177,35 @@ class TestWmsSsccSequence(TransactionCase):
             "sequence_id": self.raw_seq_main.id,
         })
 
-        # 3. Duplicar (company, GCP, extension) en misma compañía -> error
+        # 3. Duplicar (GCP, extension) en misma compañía -> error
         with mute_logger("odoo.sql_db"), self.assertRaises(IntegrityError):
             with self.cr.savepoint():
                 self.SsccSequence.create({
-                    "name": "SSCC Namespace Duplicate",
+                    "name": "SSCC Namespace Duplicate Same Company",
+                    "company_id": self.Company.id,
                     "gs1_company_prefix": "7601234",
                     "extension_digit": "3",
                     "sequence_id": self.raw_seq_main.id,
+                })
+
+        # 4. Duplicar (GCP, extension) en compañía distinta -> error (Global SSCC Namespace Guard)
+        raw_seq_sec = self.IrSequence.create({
+            "name": "Raw SSCC Counter Secondary",
+            "code": "wms.sscc.raw.sec",
+            "company_id": self.company_secondary.id,
+            "padding": 0,
+            "number_increment": 1,
+            "number_next_actual": 1,
+            "use_date_range": False,
+        })
+        with mute_logger("odoo.sql_db"), self.assertRaises(IntegrityError):
+            with self.cr.savepoint():
+                self.SsccSequence.create({
+                    "name": "SSCC Namespace Duplicate Cross Company",
+                    "company_id": self.company_secondary.id,
+                    "gs1_company_prefix": "7601234",
+                    "extension_digit": "3",
+                    "sequence_id": raw_seq_sec.id,
                 })
 
     # ------------------------------------------------------------------
