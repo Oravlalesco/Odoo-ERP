@@ -32,7 +32,7 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
   - Opcional, indexado, sin default (`hu_class = False` significa clasificación no asignada).
 - **Sin Sincronizaciones Automáticas**: Las operaciones nativas de Odoo (agregar/retirar quants, cambiar `package_type_id`) no auto-mutan `hu_state` ni auto-infieren `hu_class`. La gobernanza de transiciones queda reservada para futuros comandos WMS explícitos.
 
-### 4. Asignador de Secuencias GS1 SSCC-18 (`wms.sscc.sequence` — HU-003A)
+### 4. Asignador de Secuencias GS1 SSCC-18 (`wms.sscc.sequence` — HU-003A + HU-003A.1)
 - **Modelo Asignador (`wms.sscc.sequence`)**:
   - Campos: `name`, `active`, `company_id`, `gs1_company_prefix` (GCP de 4 a 12 dígitos ASCII), `extension_digit` (0-9), `sequence_id` (Many2one a `ir.sequence`).
   - Constraint de Unicidad Global de Base de Datos: `UNIQUE(gs1_company_prefix, extension_digit)` (impide que dos compañías dentro de la misma base de datos Odoo administren independientemente el mismo namespace GCP + extensión).
@@ -40,9 +40,16 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
   - API Pública `next_sscc()`: Genera identificadores SSCC-18 válidos (`extension + GCP + serial + check_digit`) calculando el dígito verificador módulo-10 con `get_barcode_check_digit` y validando con `check_barcode_encoding`.
   - Seguridad RBAC: `group_wms_operator` y `group_wms_supervisor` tienen permiso de lectura y ejecución de `next_sscc()`, mientras que `group_wms_manager` y `base.group_system` tienen permisos completos CRUD.
 
-### 5. Extensiones WMS Deliberadamente Diferidas (HU-003B+)
-- Asignación de SSCC a paquetes y reemplazo de referencias (`package.name = allocator.next_sscc()`).
-- Motor de etiquetas logísticas GS1 y reportes de impresión/reimpresión.
+### 5. Asignación Explícita de SSCC a Paquetes (`stock.package.assign_sscc` — HU-003B)
+- **Método Público `assign_sscc(sscc_sequence_id)`**:
+  - Argumento estricto: `sscc_sequence_id` (entero positivo ID del asignador).
+  - Idempotencia: Si el paquete ya posee `valid_sscc=True`, devuelve `name` de inmediato sin consumir secuencia ni acceder al allocator.
+  - Guard de Compañía: Exige `package.company_id` resuelto y coincidencia exacta con `allocator.company_id`.
+  - Guard de Colisión: Verifica que no existan paquetes visibles con el mismo SSCC generado antes de escribir `name`.
+  - RBAC de Intersección: Requiere simultáneamente permiso de escritura sobre `stock.package` (`stock.group_stock_user`) y lectura sobre `wms.sscc.sequence` (`wms_core.group_wms_operator`/supervisor/manager).
+
+### 6. Extensiones WMS Deliberadamente Diferidas (HU-003C+)
+- Motor de etiquetas logísticas GS1 y reportes de impresión/reimpresión (HU-003C).
 - Motor de operaciones de empaque atómicas (`pack`, `unpack`, `split`, `merge`).
 - Máquina de estados de ciclo de vida ejecutable.
 - Integración con Work y tareas dirigidas (`current_work_id`, `last_work_id`).
@@ -56,8 +63,10 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
 |---|---|---|
 | **HU-001** | Bootstrap WMS Handling Units (Scaffold & Dependencies) | ✅ Merged |
 | **HU-002** | Stock Package WMS Core Metadata (`hu_state`, `hu_class`) | ✅ Merged |
-| **HU-003A** | SSCC-18 Allocation Core (`wms.sscc.sequence`, `next_sscc()`) | ✅ Current |
-| **HU-003B** | GS1 Logistic Label / Package Assignment | ⏸ Siguiente |
+| **HU-003A** | SSCC-18 Allocation Core (`wms.sscc.sequence`, `next_sscc()`) | ✅ Merged |
+| **HU-003A.1** | Global SSCC Namespace Guard (`UNIQUE(GCP, extension)`) | ✅ Merged |
+| **HU-003B** | Package SSCC Assignment (`stock.package.assign_sscc()`) | ✅ Current |
+| **HU-003C** | GS1 Logistic Label / Print Engine | ⏸ Siguiente |
 | **HU-004+** | HU Operation Engine (`pack`, `unpack`, `split`, `merge`) | ⏸ Diferido |
 | **HU-005+** | Multi-level Hierarchy & Nesting Validations | ⏸ Diferido |
 

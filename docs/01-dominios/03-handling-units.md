@@ -144,7 +144,10 @@ La trazabilidad de movimientos físicos de paquetes ya está cubierta de forma n
 
 Odoo 19 tiene un campo `valid_sscc` que valida si `name` cumple el algoritmo checksum GS1 SSCC-18, y `name` se utiliza directamente como la referencia SSCC.
 
-En **HU-003A**, se implementa el modelo asignador `wms.sscc.sequence`, que configura y consume un contador transaccional `ir.sequence` estándar para producir identificadores SSCC-18 conformes a GS1 (`extension_digit (1) + GCP (4..12) + serial (12..4) + check_digit (1)`). La asignación de estos códigos a paquetes (`package.name`) y el motor de etiquetas logísticas se implementan en **HU-003B**.
+- **HU-003A**: Se implementa el modelo asignador `wms.sscc.sequence`, que configura y consume un contador transaccional `ir.sequence` estándar para producir identificadores SSCC-18 conformes a GS1 (`extension_digit (1) + GCP (4..12) + serial (12..4) + check_digit (1)`).
+- **HU-003A.1**: Endurecimiento de unicidad global de base de datos (`UNIQUE(gs1_company_prefix, extension_digit)`).
+- **HU-003B**: Asignación explícita e idempotente de identificadores SSCC a paquetes (`stock.package.assign_sscc(sscc_sequence_id)`), reemplazando el `name` genérico del paquete sin campos duplicados.
+- **HU-003C**: Motor de renderizado, impresión y reimpresión de etiquetas logísticas GS1 (diferido).
 
 ---
 
@@ -163,13 +166,13 @@ En **HU-003A**, se implementa el modelo asignador `wms.sscc.sequence`, que confi
 
 | Modelo | Extensión |
 |---|---|
-| `stock.package` | **Implementados en HU-002**: `hu_state`, `hu_class`. **Diferidos**: `seal_number`, `gtin`, `label_state`, `current_work_id`, `last_work_id`, `weight_gross`, `weight_net`. (Nota: no se crea campo `sscc`; se reutiliza `name` + `valid_sscc`). |
+| `stock.package` | **Implementados en HU-002**: `hu_state`, `hu_class`. **Implementado en HU-003B**: método `assign_sscc()`. **Diferidos**: `seal_number`, `gtin`, `label_state`, `current_work_id`, `last_work_id`, `weight_gross`, `weight_net`. (Nota: no se crea campo `sscc`; se reutiliza `name` + `valid_sscc`). |
 
 ### Modelos Nuevos
 
 | Modelo | Estado | Propósito |
 |---|---|---|
-| `wms.sscc.sequence` | ✅ HU-003A | Asignador de secuencias GS1 SSCC-18 con GCP configurable y contador `ir.sequence` |
+| `wms.sscc.sequence` | ✅ HU-003A / HU-003A.1 | Asignador de secuencias GS1 SSCC-18 con GCP configurable y contador `ir.sequence` |
 | `wms.hu.operation` | ⏸ Diferido | Historial de operaciones semánticas WMS sobre HU (movimientos físicos cubiertos por `stock.package.history`) |
 
 > **Nota**: Ya **no** se propone `wms.handling.unit` como modelo independiente. La HU ES `stock.package` extendido (ADR-013).
