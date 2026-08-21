@@ -19,7 +19,10 @@ de las Handling Units (ADR-013), prohibiendo la creación de modelos paralelos t
         "wms_product_logistics",
         "stock",
     ],
-    "data": [],
+    "data": [
+        "security/wms_handling_unit_security.xml",
+        "security/ir.model.access.csv",
+    ],
     "installable": True,
     "application": False,
     "auto_install": False,

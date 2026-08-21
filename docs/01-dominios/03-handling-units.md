@@ -142,7 +142,9 @@ La trazabilidad de movimientos físicos de paquetes ya está cubierta de forma n
 
 ### Implementación
 
-Odoo 19 tiene un campo `valid_sscc` que valida si `name` cumple el algoritmo checksum GS1 SSCC-18, y `name` se utiliza directamente como la referencia SSCC. La generación automática y gestión del ciclo de vida de etiquetas GS1 se implementará en fases posteriores.
+Odoo 19 tiene un campo `valid_sscc` que valida si `name` cumple el algoritmo checksum GS1 SSCC-18, y `name` se utiliza directamente como la referencia SSCC.
+
+En **HU-003A**, se implementa el modelo asignador `wms.sscc.sequence`, que configura y consume un contador transaccional `ir.sequence` estándar para producir identificadores SSCC-18 conformes a GS1 (`extension_digit (1) + GCP (4..12) + serial (12..4) + check_digit (1)`). La asignación de estos códigos a paquetes (`package.name`) y el motor de etiquetas logísticas se implementan en **HU-003B**.
 
 ---
 
@@ -155,6 +157,7 @@ Odoo 19 tiene un campo `valid_sscc` que valida si `name` cumple el algoritmo che
 | `stock.package` | **Base completa** de HU: jerarquía, ubicación, propietario, contenido, referencia `name`, validación `valid_sscc` |
 | `stock.package.type` | **Base completa** de tipo de paquete: dimensiones (`packaging_length`, `width`, `height`), peso, capacidades |
 | `stock.package.history` | Historial nativo de movimientos y traslados físicos de paquetes |
+| `ir.sequence` | Contador transaccional y atómico consumido por `wms.sscc.sequence` |
 
 ### Modelos Extendidos
 
@@ -162,11 +165,11 @@ Odoo 19 tiene un campo `valid_sscc` que valida si `name` cumple el algoritmo che
 |---|---|
 | `stock.package` | **Implementados en HU-002**: `hu_state`, `hu_class`. **Diferidos**: `seal_number`, `gtin`, `label_state`, `current_work_id`, `last_work_id`, `weight_gross`, `weight_net`. (Nota: no se crea campo `sscc`; se reutiliza `name` + `valid_sscc`). |
 
-### Modelos Nuevos (⏸ Diferidos)
+### Modelos Nuevos
 
 | Modelo | Estado | Propósito |
 |---|---|---|
-| `wms.sscc.sequence` | ⏸ Diferido | Generador de secuencias SSCC-18 WMS con GCP configurable |
+| `wms.sscc.sequence` | ✅ HU-003A | Asignador de secuencias GS1 SSCC-18 con GCP configurable y contador `ir.sequence` |
 | `wms.hu.operation` | ⏸ Diferido | Historial de operaciones semánticas WMS sobre HU (movimientos físicos cubiertos por `stock.package.history`) |
 
 > **Nota**: Ya **no** se propone `wms.handling.unit` como modelo independiente. La HU ES `stock.package` extendido (ADR-013).
