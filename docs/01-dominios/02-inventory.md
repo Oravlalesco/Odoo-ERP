@@ -174,7 +174,16 @@ Para bloqueos lógicos que no implican movimiento físico (ej: inventario bloque
 - **Separación de Capas**:
   - `stock.quant` mantiene la verdad física y de reservas nativas de Odoo.
   - La disponibilidad WMS aplica la política de bloqueos operacionales sobre la consulta.
-  - La elegibilidad de roles de ubicación (`wms_location_role`), disponibilidad agregada y la integración con reservas y allocation quedan diferidas a fases posteriores.
+
+#### 6. Matching Batch de Bloqueos Operacionales (INV-005)
+- **Evaluación en Lote Anti-N+1**:
+  - `get_blocked_quants(company_id, quants)`: Identifica cuáles quants de un recordset transitorio `stock.quant` están afectados por bloqueos activos.
+  - **Fase 1 (Fetch Batch)**: Ejecuta exactamente **1 búsqueda ORM amplia** sobre `wms.inventory.block` combinando los scopes requeridos con `Domain.OR`.
+  - **Fase 2 (Exact Matching en Memoria)**: Evalúa las restricciones dimensionales exactas en memoria (Python) mediante `parent_path.startswith(...)` y tuplas de producto/lote/propietario, garantizando paridad semántica con `is_blocked()` y previniendo falsos positivos por producto cruzado (*cross-product false positives*).
+- **Invariantes Arquitectónicos**:
+  - **Cero Persistencia**: `wms.inventory.block` no almacena `quant_id` ni crea tablas intermedias; `stock.quant` se usa transitoriamente como candidato de consulta.
+  - **Seguridad**: Aplica `check_access("read")` antes de procesar el lote y valida coherencia de compañía en cada quant (`location_id.company_id`).
+  - **Frontera Funcional**: No calcula disponibilidad agregada ni altera reservas nativas (`_action_assign()`); sirve como base optimizada para motores posteriores de disponibilidad y allocation.
 
 ---
 
