@@ -139,12 +139,12 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | `shipping_weight` | ✅ Reutilizar | **Ya existe** — peso de envío |
 | `pack_date` | ✅ Reutilizar | **Ya existe** — fecha de empaque |
 | `quant_ids` | ✅ Reutilizar | **Ya existe** — contenido (relación a quants) |
-| `valid_sscc` | ✅ Reutilizar | **Ya existe** — campo computed `_compute_valid_sscc()` con encoder SSCC |
-| HU lifecycle (state machine) | 🆕 Crear WMS | Estado del ciclo de vida WMS |
-| `seal_number` | 🆕 Crear WMS | Número de sello |
-| `hu_operational_class` | 🆕 Crear WMS | Clasificación operacional |
-| Work references | 🆕 Crear WMS | Enlace a `wms.work` |
-| HU operation history | 🆕 Crear WMS | Log de operaciones (pack, unpack, split, merge) |
+| `valid_sscc` | ✅ Reutilizar | **Ya existe** — campo computed `_compute_valid_sscc()` con encoder SSCC; `name` se usa como referencia SSCC |
+| HU lifecycle (`hu_state`) | 🔧 HU-002 | Metadata persistida (`EMPTY..DISPOSED`, nullable); motor de transiciones diferido |
+| `seal_number` | ⏸ Diferido | Número de sello (diferido) |
+| `hu_class` | 🔧 HU-002 | Clasificación operacional (`PALLET`, `CASE`, `TOTE`, `CONTAINER`, `MIXED`) |
+| Work references | ⏸ Diferido | Enlace a `wms.work` (diferido) |
+| HU operation history | ⏸ Diferido | `stock.package.history` nativo reutilizado; modelo semántico WMS diferido |
 
 ### `stock.package.type`
 

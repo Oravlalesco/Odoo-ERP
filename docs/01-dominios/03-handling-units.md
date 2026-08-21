@@ -36,13 +36,14 @@ La documentación v1.0 proponía construir HU "sobre el paquete básico de Odoo"
 | `shipping_weight` | Peso de envío real | ✅ |
 | `pack_date` | Fecha de empaque | ✅ |
 | `quant_ids` | Contenido: quants dentro del paquete | ✅ |
+| `valid_sscc` | Validador algorítmico GS1 SSCC-18 sobre `name` | ✅ |
 
 ### `stock.package.type`
 
 | Campo | Significado | Ya existe |
 |---|---|---|
 | `name` | Nombre del tipo (ej: "Euro Pallet") | ✅ |
-| `height`, `width`, `length` | Dimensiones físicas | ✅ |
+| `height`, `width`, `packaging_length` | Dimensiones físicas | ✅ |
 | `base_weight` | Peso tara (peso del contenedor vacío) | ✅ |
 | `max_weight` | Peso máximo permitido | ✅ |
 | `barcode` | Código de barras del tipo de paquete | ✅ |
@@ -56,18 +57,21 @@ La documentación v1.0 proponía construir HU "sobre el paquete básico de Odoo"
 
 ### Extensiones a `stock.package`
 
-| Campo nuevo | En inglés | Significado |
-|---|---|---|
-| `hu_state` | HU State | Estado del ciclo de vida: `EMPTY`, `OPEN`, `CLOSED`, `IN_TRANSIT`, `SHIPPED`, `RETURNED`, `DISPOSED` |
-| `hu_class` | HU Operational Class | Clasificación: `PALLET`, `CASE`, `TOTE`, `CONTAINER`, `MIXED` |
-| `seal_number` | Seal Number | Número de sello de seguridad (para transporte) |
-| `sscc` | SSCC | Serial Shipping Container Code (GS1-128) — puede ser el `name` si se valida |
-| `gtin` | GTIN | Global Trade Item Number del contenedor |
-| `label_state` | Label State | Estado de la etiqueta GS1: `PENDING`, `PRINTED`, `APPLIED`, `DAMAGED` |
-| `current_work_id` | Current Work | Work activo asociado a esta HU |
-| `last_work_id` | Last Work | Último Work completado sobre esta HU |
-| `weight_gross` | Gross Weight | Peso bruto real (tara + contenido) |
-| `weight_net` | Net Weight | Peso neto (solo contenido) |
+| Campo | En inglés | Estado | Significado |
+|---|---|---|---|
+| `hu_state` | HU State | ✅ HU-002 | Estado del ciclo de vida WMS: `EMPTY`, `OPEN`, `CLOSED`, `IN_TRANSIT`, `SHIPPED`, `RETURNED`, `DISPOSED` (False = no inicializado) |
+| `hu_class` | HU Class | ✅ HU-002 | Clasificación operacional: `PALLET`, `CASE`, `TOTE`, `CONTAINER`, `MIXED` (False = no asignada) |
+| `name` / `valid_sscc` | SSCC Reference | ✅ Odoo Nativo | Se reutiliza `stock.package.name` + `valid_sscc` nativos de Odoo 19; **no se crea un campo `sscc` duplicado** |
+| `seal_number` | Seal Number | ⏸ Diferido | Número de sello de seguridad (para transporte) |
+| `gtin` | GTIN | ⏸ Diferido | Global Trade Item Number del contenedor |
+| `label_state` | Label State | ⏸ Diferido | Estado de la etiqueta GS1: `PENDING`, `PRINTED`, `APPLIED`, `DAMAGED` |
+| `current_work_id` | Current Work | ⏸ Diferido | Work activo asociado a esta HU |
+| `last_work_id` | Last Work | ⏸ Diferido | Último Work completado sobre esta HU |
+| `weight_gross` | Gross Weight | ⏸ Diferido | Peso bruto real (tara + contenido, si se justifica frente a `shipping_weight`) |
+| `weight_net` | Net Weight | ⏸ Diferido | Peso neto (solo contenido) |
+
+> [!NOTE]
+> `stock.package.history` ya existe en Odoo 19 nativo y se reutiliza para la trazabilidad de movimientos físicos de paquetes. Un futuro modelo `wms.hu.operation` sólo registrará operaciones de semántica WMS adicional (pack/unpack/split/merge).
 
 ### Ciclo de Vida de la HU
 
@@ -100,9 +104,9 @@ stateDiagram-v2
 | **Mover** | Move | Mover la HU completa a otra ubicación | Sí |
 | **Disponer** | Dispose | Dar de baja la HU (destruir, reciclar) | No |
 
-Cada operación genera un registro en `wms.hu.operation` para trazabilidad:
+La trazabilidad de movimientos físicos de paquetes ya está cubierta de forma nativa por `stock.package.history` en Odoo 19. Para registrar eventos semánticos WMS adicionales (pack, unpack, split, merge), un futuro modelo `wms.hu.operation` (diferido) podrá capturar:
 
-### HU Operation History (`wms.hu.operation`)
+### HU Operation History (`wms.hu.operation` — ⏸ Diferido)
 
 | Campo | Significado |
 |---|---|
@@ -138,9 +142,7 @@ Cada operación genera un registro en `wms.hu.operation` para trazabilidad:
 
 ### Implementación
 
-Odoo 19 tiene un campo `valid_sscc` que puede existir como validación, pero la generación y gestión del ciclo de vida de etiquetas GS1 será responsabilidad del módulo WMS.
-
-El `name` de `stock.package` **puede ser el SSCC** cuando el paquete lo requiera.
+Odoo 19 tiene un campo `valid_sscc` que valida si `name` cumple el algoritmo checksum GS1 SSCC-18, y `name` se utiliza directamente como la referencia SSCC. La generación automática y gestión del ciclo de vida de etiquetas GS1 se implementará en fases posteriores.
 
 ---
 
@@ -150,23 +152,24 @@ El `name` de `stock.package` **puede ser el SSCC** cuando el paquete lo requiera
 
 | Modelo | Qué reutilizamos |
 |---|---|
-| `stock.package` | **Base completa** de HU: jerarquía, ubicación, propietario, contenido |
-| `stock.package.type` | **Base completa** de tipo de paquete: dimensiones, peso, capacidades |
+| `stock.package` | **Base completa** de HU: jerarquía, ubicación, propietario, contenido, referencia `name`, validación `valid_sscc` |
+| `stock.package.type` | **Base completa** de tipo de paquete: dimensiones (`packaging_length`, `width`, `height`), peso, capacidades |
+| `stock.package.history` | Historial nativo de movimientos y traslados físicos de paquetes |
 
 ### Modelos Extendidos
 
 | Modelo | Extensión |
 |---|---|
-| `stock.package` | Campos: `hu_state`, `hu_class`, `seal_number`, `sscc`, `gtin`, `label_state`, `current_work_id`, `weight_gross`, `weight_net` |
+| `stock.package` | **Implementados en HU-002**: `hu_state`, `hu_class`. **Diferidos**: `seal_number`, `gtin`, `label_state`, `current_work_id`, `last_work_id`, `weight_gross`, `weight_net`. (Nota: no se crea campo `sscc`; se reutiliza `name` + `valid_sscc`). |
 
-### Modelos Nuevos
+### Modelos Nuevos (⏸ Diferidos)
 
-| Modelo | Propósito |
-|---|---|
-| `wms.hu.operation` | Historial de operaciones sobre HU |
-| `wms.sscc.sequence` | Generador de SSCC con GCP configurable |
+| Modelo | Estado | Propósito |
+|---|---|---|
+| `wms.sscc.sequence` | ⏸ Diferido | Generador de secuencias SSCC-18 WMS con GCP configurable |
+| `wms.hu.operation` | ⏸ Diferido | Historial de operaciones semánticas WMS sobre HU (movimientos físicos cubiertos por `stock.package.history`) |
 
-> **Nota**: Ya **no** se propone `wms.handling.unit` como modelo independiente. La HU ES `stock.package` extendido.
+> **Nota**: Ya **no** se propone `wms.handling.unit` como modelo independiente. La HU ES `stock.package` extendido (ADR-013).
 
 ---
 

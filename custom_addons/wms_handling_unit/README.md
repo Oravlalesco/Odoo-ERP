@@ -23,17 +23,19 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
 - **Ubicación y Compañía**: `location_id` y `company_id` computados determinísticamente a partir del contenido o paquetes contenidos; `company_id` puede ser `False` en paquetes multi-compañía o ubicaciones compartidas.
 - **Propietario y Pesaje**: `owner_id`, `shipping_weight` y fecha de empaque `pack_date`.
 
-### 3. Integración con Perfil Logístico (PLM)
-- `wms_product_logistics` expone sobre el perfil logístico del producto:
-  - `allowed_hu_type_ids`: Tipos de HU permitidos para el producto (`Many2many` a `stock.package.type`).
-  - `default_hu_type_id`: Tipo de HU por defecto (`Many2one` a `stock.package.type`).
+### 3. Metadata Operativa WMS (`stock.package` — HU-002)
+- **Estado de Ciclo de Vida (`hu_state`)**:
+  - Valores: `EMPTY` (Vacía), `OPEN` (Abierta), `CLOSED` (Cerrada), `IN_TRANSIT` (En tránsito), `SHIPPED` (Despachada), `RETURNED` (Devuelta), `DISPOSED` (Dada de baja).
+  - Opcional, indexado, sin default (`hu_state = False` significa que el ciclo de vida WMS todavía no ha sido inicializado sobre ese paquete).
+- **Clasificación Operacional (`hu_class`)**:
+  - Valores: `PALLET` (Pallet), `CASE` (Caja), `TOTE` (Tote), `CONTAINER` (Contenedor), `MIXED` (Mixta).
+  - Opcional, indexado, sin default (`hu_class = False` significa clasificación no asignada).
+- **Sin Sincronizaciones Automáticas**: Las operaciones nativas de Odoo (agregar/retirar quants, cambiar `package_type_id`) no auto-mutan `hu_state` ni auto-infieren `hu_class`. La gobernanza de transiciones queda reservada para futuros comandos WMS explícitos.
 
-### 4. Extensiones WMS Deliberadamente Diferidas (HU-002+)
-En HU-001 (Pure Scaffold) no se introduce ningún modelo ni campo nuevo. Quedan diferidos para fases posteriores:
-- Estados de ciclo de vida de HU (`hu_state`).
-- Clasificación operacional de HU (`hu_class`), diferida a HU-002.
+### 4. Extensiones WMS Deliberadamente Diferidas (HU-003+)
 - Generador de secuencias SSCC-18 WMS (`wms.sscc.sequence`).
-- Operaciones de empaque/desempaque atómicas (`pack`, `unpack`, `split`, `merge`).
+- Motor de operaciones de empaque atómicas (`pack`, `unpack`, `split`, `merge`).
+- Máquina de estados de ciclo de vida ejecutable.
 - Integración con Work y tareas dirigidas (`current_work_id`, `last_work_id`).
 - Eventos operacionales de inventario y Outbox atómico (ADR-019).
 
@@ -43,8 +45,8 @@ En HU-001 (Pure Scaffold) no se introduce ningún modelo ni campo nuevo. Quedan 
 
 | Tarea | Capacidad | Estado |
 |---|---|---|
-| **HU-001** | Bootstrap WMS Handling Units (Scaffold & Dependencies) | ✅ Current |
-| **HU-002+** | Stock Package WMS Core / Lifecycle Extension | ⏸ Siguiente |
+| **HU-001** | Bootstrap WMS Handling Units (Scaffold & Dependencies) | ✅ Merged |
+| **HU-002** | Stock Package WMS Core Metadata (`hu_state`, `hu_class`) | ✅ Current |
 | **HU-003+** | SSCC-18 Sequence Generator & GS1 Label Engine | ⏸ Diferido |
 | **HU-004+** | HU Operation Engine (`pack`, `unpack`, `split`, `merge`) | ⏸ Diferido |
 | **HU-005+** | Multi-level Hierarchy & Nesting Validations | ⏸ Diferido |
