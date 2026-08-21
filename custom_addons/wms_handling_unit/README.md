@@ -35,7 +35,7 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
 ### 4. Asignador de Secuencias GS1 SSCC-18 (`wms.sscc.sequence` — HU-003A)
 - **Modelo Asignador (`wms.sscc.sequence`)**:
   - Campos: `name`, `active`, `company_id`, `gs1_company_prefix` (GCP de 4 a 12 dígitos ASCII), `extension_digit` (0-9), `sequence_id` (Many2one a `ir.sequence`).
-  - Constraint de Unicidad: `UNIQUE(company_id, gs1_company_prefix, extension_digit)`.
+  - Constraint de Unicidad Global de Base de Datos: `UNIQUE(gs1_company_prefix, extension_digit)` (impide que dos compañías dentro de la misma base de datos Odoo administren independientemente el mismo namespace GCP + extensión).
   - Reutilización de Contador: `ir.sequence` actúa como contador transaccional puro (`prefix=False`, `suffix=False`, `use_date_range=False`, `number_increment > 0`).
   - API Pública `next_sscc()`: Genera identificadores SSCC-18 válidos (`extension + GCP + serial + check_digit`) calculando el dígito verificador módulo-10 con `get_barcode_check_digit` y validando con `check_barcode_encoding`.
   - Seguridad RBAC: `group_wms_operator` y `group_wms_supervisor` tienen permiso de lectura y ejecución de `next_sscc()`, mientras que `group_wms_manager` y `base.group_system` tienen permisos completos CRUD.

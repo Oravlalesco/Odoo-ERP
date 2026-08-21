@@ -63,9 +63,9 @@ class WmsSsccSequence(models.Model):
         help="Secuencia transaccional Odoo utilizada exclusivamente como contador numérico para el serial SSCC.",
     )
 
-    _company_gcp_extension_unique = models.Constraint(
-        "UNIQUE(company_id, gs1_company_prefix, extension_digit)",
-        "Ya existe un asignador SSCC para esta compañía, prefijo GS1 y dígito de extensión.",
+    _gcp_extension_unique = models.Constraint(
+        "UNIQUE(gs1_company_prefix, extension_digit)",
+        "Ya existe un asignador SSCC para este prefijo GS1 y dígito de extensión.",
     )
 
     @api.constrains("gs1_company_prefix")
