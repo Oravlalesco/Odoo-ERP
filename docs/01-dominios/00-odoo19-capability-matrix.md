@@ -238,6 +238,7 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | Storage/putaway/replenishment/allocation profiles | ⏸ Diferido | PLM-006B: diferido hasta existencia de entidades de dominio reales y Typed Policy Engine. |
 | Vistas administrativas (list, form, search, action) | 🆕 Crear WMS | Vistas administrativas para gestión de `wms.product.logistics`. PLM-007A. |
 | Navegación WMS y exposición RBAC (menus) | 🆕 Crear WMS | Jerarquía `WMS` > `Maestros` > `Perfiles logísticos` con RBAC nativo. PLM-007B. |
+| Integración contextual desde Producto (`product.template` stat button) | 🆕 Crear WMS | Acceso contextual desde `product.template` al perfil WMS 1:0..1. PLM-007C. |
 
 ---
 

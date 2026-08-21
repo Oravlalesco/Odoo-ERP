@@ -8,3 +8,4 @@ from . import test_hu_type_restrictions
 from . import test_quality_inspection_policy
 from . import test_administrative_views
 from . import test_navigation_rbac
+from . import test_product_template_integration

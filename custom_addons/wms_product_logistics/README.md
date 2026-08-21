@@ -18,7 +18,7 @@ It defines the operational and logistical characteristics of products required b
 - Domain strategy profiles (Storage, Putaway, Replenishment, Allocation).
 - Quality inspection triggers and sampling rules.
 
-> **Current Status**: **PLM-007B — Navigation & RBAC Exposure**. Exposición de navegación WMS (`WMS` > `Maestros` > `Perfiles logísticos`) con control de acceso por roles WMS (Operator/Supervisor: Read-Only, Manager/System Admin: CRUD, Plain Internal: Oculto). Integración contextual con producto diferida a PLM-007C.
+> **Current Status**: **PLM-007C — Product Template Integration**. Integración contextual desde el formulario de `product.template` hacia el perfil `wms.product.logistics` mediante botón estadístico (`oe_stat_button`), respetando la relación 1:0..1, el lifecycle de archivado (`active_test: False`) y sin auto-creación ni campos adicionales en producto.
 
 ---
 
@@ -120,6 +120,13 @@ product.template (Odoo) ◄─── (1:0..1) ───► wms.product.logistics
   - **Plain Internal User** (`base.group_user`): menús ocultos, lectura denegada (`AccessError`).
   - **Sin escalación a Stock**: ningún rol WMS hereda grupos de inventario nativo (`stock.group_stock_*`).
 
+**Integración con Producto (PLM-007C):**
+- Acceso contextual desde formulario de `product.template` (`product.product_template_only_form_view`):
+  - Stat button `oe_stat_button` (icono `fa-truck`, string `Logística WMS`, invisible `not id`).
+  - Acción contextual dedicada `action_wms_product_logistics_from_product` (`domain=[('product_tmpl_id', '=', active_id)]`, `context={'default_product_tmpl_id': active_id, 'active_test': False}`).
+  - Preserva el lifecycle de productos archivados (`active_test: False`).
+  - Sin duplicación de campos ni métodos Python auxiliares en `product.template`.
+
 - **Odoo 19 Reutilization**:
   - `stock.package` = Instancia física del HU.
   - `stock.package.type` = Catálogo oficial de tipos (dimensiones, peso tara/máximo, `package_use`).
@@ -149,8 +156,8 @@ All items below represent future development stages:
 | **PLM-006A** | Quality Inspection Policy Master (`requires_quality_inspection`, `type`, `rate`) | ✅ Merged |
 | **PLM-006B** | Strategy Profile Bindings (`storage`, `putaway`, `replenishment`, `allocation`) | ⏸ Deferred |
 | **PLM-007A** | Administrative Views Foundation (`list`, `form`, `search`, `action`) | ✅ Merged |
-| **PLM-007B** | Navigation & RBAC Exposure (Menus & Access) | ✅ Current |
-| **PLM-007C** | Product Template Integration (Contextual Action from Product) | ⏳ Next |
+| **PLM-007B** | Navigation & RBAC Exposure (Menus & Access) | ✅ Merged |
+| **PLM-007C** | Product Template Integration (Contextual Action from Product) | ✅ Current |
 
 ---
 
