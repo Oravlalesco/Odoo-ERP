@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         CORE-NAV: WMS Shared Root Navigation Menu (PLM-007B)
+         ============================================================ -->
+
+    <menuitem id="menu_wms_root"
+              name="WMS"
+              sequence="145"
+              groups="wms_core.group_wms_operator,base.group_system"/>
+
+</odoo>
