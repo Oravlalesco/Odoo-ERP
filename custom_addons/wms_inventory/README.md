@@ -22,20 +22,18 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 - `wms_location_role` (aportado y gestionado por `wms_warehouse_master`) define la semántica operativa por ubicación (recepción, staging, picking, putaway, calidad, packing, despacho).
 - El campo nativo `stock.location.usage` **no se extiende** con valores personalizados (ADR-026).
 
-### 4. Bloqueos Operacionales de Inventario (`wms.inventory.block`)
-- **Estado actual**: **INV-002 — Operational Inventory Block Core**.
-- Registro lógico inmutable de bloqueo sobre dimensiones operacionales:
-  - `LOCATION`: Bloqueo de ubicación completa (`location_id`).
-  - `PRODUCT_LOCATION`: Bloqueo de producto en ubicación (`product_id`, `location_id`).
-  - `LOT`: Bloqueo de lote específico (`product_id`, `lot_id`, con validación `product_id == lot_id.product_id`).
-  - `PACKAGE`: Bloqueo de paquete / HU (`package_id`).
-  - `OWNER_LOCATION`: Bloqueo de inventario consignado por propietario en ubicación (`owner_id`, `location_id`).
-- **Tipos de bloqueo**: `CYCLE_COUNT` (Conteo cíclico), `INVESTIGATION` (Investigación), `HOLD` (Retención operacional), `CUSTOMS` (Aduana).
-- **Inmutabilidad y ciclo de vida**:
-  - `create()` impone server-side `blocked_by=env.user`, `blocked_at=now()`, `released_at=False`.
-  - Edición directa (`write()`) y borrado (`unlink()`) estrictamente prohibidos (`UserError`).
-  - Única mutación válida: `action_release()`, restringida a Supervisor WMS o System Admin, estableciendo `released_at=now()` con DB CHECK `released_at >= blocked_at`.
-- **Multi-compañía**: `check_company=True` en dimensiones físicas y regla de registro global `[('company_id', 'in', company_ids)]`.
+### 4. Bloqueos Operacionales y Matching API (`wms.inventory.block`)
+- **Estado actual**: **INV-003 — Operational Block Matching Query API**.
+- **Persistencia (INV-002)**:
+  - Scopes: `LOCATION`, `PRODUCT_LOCATION`, `LOT`, `PACKAGE`, `OWNER_LOCATION`.
+  - Tipos: `CYCLE_COUNT`, `INVESTIGATION`, `HOLD`, `CUSTOMS`.
+  - Inmutabilidad server-side (`create()` con metadata server-owned, `write()` directo y `unlink()` prohibidos, `action_release()` restringido a Supervisor/Admin).
+- **Matching API de Solo Lectura (INV-003)**:
+  - `_get_matching_domain(...)`: Construcción determinista con `odoo.fields.Domain`.
+  - `get_matching_blocks(...)`: Búsqueda ORM en una sola consulta de todos los bloqueos activos aplicables.
+  - `is_blocked(...)`: Verificación booleana ultra rápida con `search_count(limit=1)`.
+  - Semántica jerárquica: `LOCATION` y `PACKAGE` cubren ancestros/descendientes (`parent_of`).
+  - Sin alteración de disponibilidad ni reservas nativas de Odoo (`_get_available_quantity()`).
 
 ---
 
@@ -44,11 +42,12 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 | Tarea | Capacidad | Estado |
 |---|---|---|
 | **INV-001** | Bootstrap WMS Inventory Core (Scaffold & Dependencies) | ✅ Merged |
-| **INV-002** | Operational Inventory Block Core (`wms.inventory.block`) | ✅ Current |
-| **INV-003+** | Availability Engine & Block Matching (Diferido) | ⏸ Siguiente |
-| **INV-004+** | Operational Event Journal (`wms.inventory.event`) | ⏸ Diferido |
-| **INV-005+** | Audit Log (`wms.audit.log`) | ⏸ Diferido |
-| **INV-006+** | Integration Outbox (`wms.outbox`) | ⏸ Diferido |
+| **INV-002** | Operational Inventory Block Core (`wms.inventory.block`) | ✅ Merged |
+| **INV-003** | Operational Block Matching Query API | ✅ Current |
+| **INV-004+** | Availability / Allocation Enforcement (Diferido) | ⏸ Siguiente |
+| **INV-005+** | Operational Event Journal (`wms.inventory.event`) | ⏸ Diferido |
+| **INV-006+** | Audit Log (`wms.audit.log`) | ⏸ Diferido |
+| **INV-007+** | Integration Outbox (`wms.outbox`) | ⏸ Diferido |
 
 ---
 

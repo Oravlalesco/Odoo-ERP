@@ -1,5 +1,6 @@
 from odoo import api, fields, models
 from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.fields import Domain
 
 
 class WmsInventoryBlock(models.Model):
@@ -184,3 +185,151 @@ class WmsInventoryBlock(models.Model):
             raise UserError("El bloqueo ya ha sido liberado.")
         now = fields.Datetime.now()
         return super().write({"released_at": now})
+
+    # ------------------------------------------------------------------
+    # API DE CONSULTA DE MATCHING DE BLOQUEOS (INV-003)
+    # ------------------------------------------------------------------
+
+    @api.model
+    def _get_matching_domain(
+        self,
+        company_id,
+        product_id,
+        location_id,
+        lot_id=False,
+        package_id=False,
+        owner_id=False,
+    ):
+        """Construir el Domain ORM determinista para consultar bloqueos operacionales activos.
+
+        :param company_id: Recordset singleton de res.company (requerido).
+        :param product_id: Recordset singleton de product.product (requerido).
+        :param location_id: Recordset singleton de stock.location (requerido).
+        :param lot_id: Recordset singleton de stock.lot o False (opcional).
+        :param package_id: Recordset singleton de stock.package o False (opcional).
+        :param owner_id: Recordset singleton de res.partner o False (opcional).
+        :return: Instancia de odoo.fields.Domain.
+        """
+        if not company_id or not hasattr(company_id, "_name") or company_id._name != "res.company":
+            raise ValueError("company_id debe ser un recordset singleton de res.company.")
+        company_id.ensure_one()
+
+        if not product_id or not hasattr(product_id, "_name") or product_id._name != "product.product":
+            raise ValueError("product_id debe ser un recordset singleton de product.product.")
+        product_id.ensure_one()
+
+        if not location_id or not hasattr(location_id, "_name") or location_id._name != "stock.location":
+            raise ValueError("location_id debe ser un recordset singleton de stock.location.")
+        location_id.ensure_one()
+
+        if lot_id:
+            if not hasattr(lot_id, "_name") or lot_id._name != "stock.lot":
+                raise ValueError("lot_id debe ser un recordset singleton de stock.lot o False.")
+            lot_id.ensure_one()
+
+        if package_id:
+            if not hasattr(package_id, "_name") or package_id._name != "stock.package":
+                raise ValueError("package_id debe ser un recordset singleton de stock.package o False.")
+            package_id.ensure_one()
+
+        if owner_id:
+            if not hasattr(owner_id, "_name") or owner_id._name != "res.partner":
+                raise ValueError("owner_id debe ser un recordset singleton de res.partner o False.")
+            owner_id.ensure_one()
+
+        if company_id.id not in self.env.companies.ids:
+            raise AccessError("No tiene acceso a la compañía especificada.")
+
+        base_domain = Domain([
+            ("company_id", "=", company_id.id),
+            ("released_at", "=", False),
+        ])
+
+        scope_domains = [
+            Domain([
+                ("block_scope", "=", "LOCATION"),
+                ("location_id", "parent_of", location_id.id),
+            ]),
+            Domain([
+                ("block_scope", "=", "PRODUCT_LOCATION"),
+                ("product_id", "=", product_id.id),
+                ("location_id", "parent_of", location_id.id),
+            ]),
+        ]
+
+        if lot_id:
+            scope_domains.append(
+                Domain([
+                    ("block_scope", "=", "LOT"),
+                    ("product_id", "=", product_id.id),
+                    ("lot_id", "=", lot_id.id),
+                ])
+            )
+
+        if package_id:
+            scope_domains.append(
+                Domain([
+                    ("block_scope", "=", "PACKAGE"),
+                    ("package_id", "parent_of", package_id.id),
+                ])
+            )
+
+        if owner_id:
+            scope_domains.append(
+                Domain([
+                    ("block_scope", "=", "OWNER_LOCATION"),
+                    ("owner_id", "=", owner_id.id),
+                    ("location_id", "parent_of", location_id.id),
+                ])
+            )
+
+        return Domain.AND([base_domain, Domain.OR(scope_domains)])
+
+    @api.model
+    def get_matching_blocks(
+        self,
+        company_id,
+        product_id,
+        location_id,
+        lot_id=False,
+        package_id=False,
+        owner_id=False,
+    ):
+        """Obtener todos los bloqueos operacionales activos que aplican a un candidato lógico.
+
+        Ejecuta una sola consulta ORM y retorna el recordset completo de bloqueos.
+        """
+        domain = self._get_matching_domain(
+            company_id,
+            product_id,
+            location_id,
+            lot_id=lot_id,
+            package_id=package_id,
+            owner_id=owner_id,
+        )
+        return self.search(domain)
+
+    @api.model
+    def is_blocked(
+        self,
+        company_id,
+        product_id,
+        location_id,
+        lot_id=False,
+        package_id=False,
+        owner_id=False,
+    ):
+        """Verificar si existe al menos un bloqueo operacional activo para el candidato lógico.
+
+        Ejecuta una búsqueda de existencia limitada (limit=1) para máximo rendimiento.
+        """
+        domain = self._get_matching_domain(
+            company_id,
+            product_id,
+            location_id,
+            lot_id=lot_id,
+            package_id=package_id,
+            owner_id=owner_id,
+        )
+        return bool(self.search_count(domain, limit=1))
+

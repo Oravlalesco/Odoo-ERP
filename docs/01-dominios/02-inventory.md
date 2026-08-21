@@ -150,7 +150,21 @@ Para bloqueos lógicos que no implican movimiento físico (ej: inventario bloque
 - **Inmutabilidad**: Edición directa (`write()`) y eliminación (`unlink()`) están estrictamente prohibidas (`UserError`).
 - **Liberación**: Se ejecuta únicamente mediante `action_release()`, autorizada para Supervisor WMS o System Admin, registrando `released_at = now()` con constraint `released_at >= blocked_at`.
 - **Multi-compañía**: Controlado por `check_company=True` en dimensiones físicas y regla global `[('company_id', 'in', company_ids)]`.
-- **Disponibilidad/Allocation**: El consumo y filtrado de estos bloqueos en los motores de asignación y cálculo de disponibilidad queda diferido a las tareas correspondientes.
+
+#### 4. API de Matching de Bloqueos Operacionales (INV-003)
+- **Consulta de Coincidencia Determinista**:
+  - `_get_matching_domain(company_id, product_id, location_id, lot_id=False, package_id=False, owner_id=False)`: Construye el domain ORM determinista mediante `odoo.fields.Domain`.
+  - `get_matching_blocks(...)`: Búsqueda ORM en una sola consulta de todos los bloqueos activos aplicables.
+  - `is_blocked(...)`: Verificación booleana con `search_count(domain, limit=1)`.
+- **Semántica Jerárquica**:
+  - `LOCATION`: Bloqueo en ubicación padre afecta a todas las ubicaciones descendientes (`location_id parent_of candidate.location_id`).
+  - `PACKAGE`: Bloqueo en paquete padre afecta a paquetes contenidos (`package_id parent_of candidate.package_id`).
+  - `LOT`: Bloqueo de lote independiente de ubicación.
+  - `PRODUCT_LOCATION` y `OWNER_LOCATION`: Jerarquía de ubicación combinada con producto o propietario exacto.
+- **Frontera Arquitectónica**:
+  - Consulta de solo lectura sin mutaciones ni caches externas.
+  - No altera `_get_available_quantity()` nativo de Odoo ni lógica de reservas.
+  - El consumo y filtrado en motores de disponibilidad y allocation queda diferido a tareas posteriores.
 
 ---
 
