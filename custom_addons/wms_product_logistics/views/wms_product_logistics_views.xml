@@ -39,18 +39,20 @@
                             <field name="product_tmpl_id" options="{'no_create': True, 'no_quick_create': True}"/>
                         </h1>
                     </div>
-                    <group>
-                        <group string="Identidad">
-                            <field name="company_id" readonly="1"/>
-                            <field name="active" readonly="1"/>
-                        </group>
-                        <group string="UOM Operacionales">
-                            <field name="pick_uom_id" options="{'no_create': True, 'no_quick_create': True}"/>
-                            <field name="case_uom_id" options="{'no_create': True, 'no_quick_create': True}"/>
-                            <field name="pallet_uom_id" options="{'no_create': True, 'no_quick_create': True}"/>
-                        </group>
-                    </group>
                     <notebook>
+                        <page string="Identidad" name="identity">
+                            <group>
+                                <field name="company_id" readonly="1"/>
+                                <field name="active" readonly="1"/>
+                            </group>
+                        </page>
+                        <page string="UOM Operacionales" name="operational_uom">
+                            <group>
+                                <field name="pick_uom_id" options="{'no_create': True, 'no_quick_create': True}"/>
+                                <field name="case_uom_id" options="{'no_create': True, 'no_quick_create': True}"/>
+                                <field name="pallet_uom_id" options="{'no_create': True, 'no_quick_create': True}"/>
+                            </group>
+                        </page>
                         <page string="Packaging &amp; Ti-Hi" name="packaging_tihi">
                             <group>
                                 <group string="Configuración Ti-Hi">

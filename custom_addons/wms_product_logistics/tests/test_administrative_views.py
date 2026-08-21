@@ -10,12 +10,12 @@ class TestAdministrativeViews(TransactionCase):
     Cubre:
     - Registro de vistas (list, form, search) y tipos.
     - Contrato de list view (10 columnas exactas, root list, sin editable).
-    - Inventario de form view (exactamente 25 campos funcionales, sin duplicados).
+    - Inventario de form view (exactamente 25 campos funcionales, sin duplicados, 6 páginas).
     - Semántica readonly en los 5 campos derivados/relacionados.
     - Opciones de seguridad en los 6 campos relacionales configurables (no_create, no_quick_create).
-    - Contrato de search view (7 search fields, 2 filtros con domain, 4 agrupadores con context).
+    - Contrato de search view (7 search fields, exactamente 2 filtros directos, exactamente 4 agrupadores con context).
     - Contrato de acción de ventana (res_model, view_mode, search_view_id).
-    - Ausencia total de campos diferidos de estrategia (PLM-006B).
+    - Ausencia total de campos diferidos de estrategia (PLM-006B) y ausencia de menús registrados.
     """
 
     @classmethod
@@ -29,6 +29,13 @@ class TestAdministrativeViews(TransactionCase):
         cls.list_arch = etree.fromstring(cls.list_view.arch)
         cls.form_arch = etree.fromstring(cls.form_view.arch)
         cls.search_arch = etree.fromstring(cls.search_view.arch)
+
+    @staticmethod
+    def _normalize_expr(value):
+        """Normalizar whitespace de una expresión XML."""
+        if not value:
+            return ""
+        return " ".join(value.split())
 
     # ------------------------------------------------------------------
     # TEST-PLM-060: View Registry Contract
@@ -75,11 +82,12 @@ class TestAdministrativeViews(TransactionCase):
         self.assertEqual(list_fields, expected_fields, "List view field inventory mismatch")
 
     # ------------------------------------------------------------------
-    # TEST-PLM-062: Form Field Inventory
+    # TEST-PLM-062: Form Field Inventory & Notebook Pages
     # ------------------------------------------------------------------
 
     def test_plm_062_form_field_inventory(self):
-        """PLM-007A-062: Form view contiene exactamente los 25 campos funcionales, una sola vez cada uno."""
+        """PLM-007A-062: Form view contiene exactamente los 25 campos funcionales (una sola vez) y exactamente 6 páginas."""
+        # 1. 25 campos únicos
         form_fields = self.form_arch.xpath("//field/@name")
         expected_fields = {
             "product_tmpl_id",
@@ -111,6 +119,31 @@ class TestAdministrativeViews(TransactionCase):
         self.assertEqual(len(form_fields), 25, "Form view must contain exactly 25 field occurrences")
         self.assertEqual(set(form_fields), expected_fields, "Form view field set mismatch")
         self.assertEqual(len(set(form_fields)), 25, "Form view must not contain duplicate fields")
+
+        # 2. Exactamente 6 páginas en el notebook
+        pages = self.form_arch.xpath("//notebook/page")
+        self.assertEqual(len(pages), 6, "Form view must contain exactly 6 notebook pages")
+        page_names = [p.get("name") for p in pages]
+        expected_page_names = [
+            "identity",
+            "operational_uom",
+            "packaging_tihi",
+            "classification_handling",
+            "shelf_life_hu",
+            "quality",
+        ]
+        self.assertEqual(page_names, expected_page_names, "Notebook page names mismatch")
+
+        page_strings = [p.get("string") for p in pages]
+        expected_page_strings = [
+            "Identidad",
+            "UOM Operacionales",
+            "Packaging & Ti-Hi",
+            "Clasificación & Manejo",
+            "Vida Útil & HUs",
+            "Calidad",
+        ]
+        self.assertEqual(page_strings, expected_page_strings, "Notebook page strings mismatch")
 
     # ------------------------------------------------------------------
     # TEST-PLM-063: Readonly Field Semantics
@@ -167,12 +200,12 @@ class TestAdministrativeViews(TransactionCase):
             )
 
     # ------------------------------------------------------------------
-    # TEST-PLM-065: Search View Contract
+    # TEST-PLM-065: Search View Contract (Exact counts and expressions)
     # ------------------------------------------------------------------
 
     def test_plm_065_search_view_contract(self):
-        """PLM-007A-065: Search view contiene 7 search fields, 2 filtros y 4 agrupadores con domains/context válidos."""
-        # 1. Search fields (7)
+        """PLM-007A-065: Search view contiene exactamente 7 search fields, exactamente 2 filtros y exactamente 4 agrupadores."""
+        # 1. Exactamente 7 search fields
         search_fields = self.search_arch.xpath("//search/field/@name")
         expected_search_fields = [
             "product_tmpl_id",
@@ -183,33 +216,57 @@ class TestAdministrativeViews(TransactionCase):
             "hazmat_class",
             "requires_quality_inspection",
         ]
+        self.assertEqual(len(search_fields), 7, "Search view must contain exactly 7 search fields")
         self.assertEqual(search_fields, expected_search_fields, "Search view search fields mismatch")
 
-        # 2. Filters
-        filter_inactive = self.search_arch.xpath("//filter[@name='inactive']")
-        self.assertEqual(len(filter_inactive), 1, "Filter 'inactive' must exist")
-        self.assertIn("('active', '=', False)", filter_inactive[0].get("domain", ""))
+        # 2. Exactamente 2 filtros directos
+        direct_filters = self.search_arch.xpath("//search/filter[not(ancestor::group)]")
+        self.assertEqual(len(direct_filters), 2, "Search view must contain exactly 2 direct filters")
+        filter_dict = {f.get("name"): f for f in direct_filters}
+        self.assertEqual(
+            set(filter_dict.keys()),
+            {"inactive", "requires_quality_inspection"},
+            "Direct filter names mismatch",
+        )
+        self.assertEqual(
+            self._normalize_expr(filter_dict["inactive"].get("domain")),
+            "[('active', '=', False)]",
+            "Filter 'inactive' domain mismatch",
+        )
+        self.assertEqual(
+            self._normalize_expr(filter_dict["requires_quality_inspection"].get("domain")),
+            "[('requires_quality_inspection', '=', True)]",
+            "Filter 'requires_quality_inspection' domain mismatch",
+        )
 
-        filter_quality = self.search_arch.xpath("//filter[@name='requires_quality_inspection']")
-        self.assertEqual(len(filter_quality), 1, "Filter 'requires_quality_inspection' must exist")
-        self.assertIn("('requires_quality_inspection', '=', True)", filter_quality[0].get("domain", ""))
-
-        # 3. Group by filters
-        group_company = self.search_arch.xpath("//filter[@name='group_company']")
-        self.assertEqual(len(group_company), 1, "Group filter 'group_company' must exist")
-        self.assertIn("'group_by': 'company_id'", group_company[0].get("context", ""))
-
-        group_abc = self.search_arch.xpath("//filter[@name='group_abc_class']")
-        self.assertEqual(len(group_abc), 1, "Group filter 'group_abc_class' must exist")
-        self.assertIn("'group_by': 'abc_class'", group_abc[0].get("context", ""))
-
-        group_vel = self.search_arch.xpath("//filter[@name='group_velocity_class']")
-        self.assertEqual(len(group_vel), 1, "Group filter 'group_velocity_class' must exist")
-        self.assertIn("'group_by': 'velocity_class'", group_vel[0].get("context", ""))
-
-        group_temp = self.search_arch.xpath("//filter[@name='group_temperature_class']")
-        self.assertEqual(len(group_temp), 1, "Group filter 'group_temperature_class' must exist")
-        self.assertIn("'group_by': 'temperature_class'", group_temp[0].get("context", ""))
+        # 3. Exactamente 4 agrupadores dentro de <group>
+        group_elements = self.search_arch.xpath("//search/group")
+        self.assertEqual(len(group_elements), 1, "Search view must contain exactly 1 <group> for group-by")
+        groupby_filters = self.search_arch.xpath("//search/group/filter")
+        self.assertEqual(len(groupby_filters), 4, "Search view must contain exactly 4 group-by filters")
+        groupby_dict = {f.get("name"): f for f in groupby_filters}
+        self.assertEqual(
+            set(groupby_dict.keys()),
+            {
+                "group_company",
+                "group_abc_class",
+                "group_velocity_class",
+                "group_temperature_class",
+            },
+            "Group-by filter names mismatch",
+        )
+        for name, expected_field in [
+            ("group_company", "company_id"),
+            ("group_abc_class", "abc_class"),
+            ("group_velocity_class", "velocity_class"),
+            ("group_temperature_class", "temperature_class"),
+        ]:
+            ctx = ast.literal_eval(groupby_dict[name].get("context", "{}"))
+            self.assertEqual(
+                ctx,
+                {"group_by": expected_field},
+                f"Group-by filter '{name}' context mismatch",
+            )
 
     # ------------------------------------------------------------------
     # TEST-PLM-066: Window Action Contract
@@ -223,11 +280,11 @@ class TestAdministrativeViews(TransactionCase):
         self.assertTrue(self.action.help, "Action help text must not be empty")
 
     # ------------------------------------------------------------------
-    # TEST-PLM-067: Deferred Strategy Fields Absent
+    # TEST-PLM-067: Deferred Strategy Fields Absent & No ir.ui.menu
     # ------------------------------------------------------------------
 
     def test_plm_067_deferred_strategy_fields_absent(self):
-        """PLM-007A-067: Los campos de estrategia diferidos (PLM-006B) no están presentes en ninguna vista."""
+        """PLM-007A-067: Los campos diferidos (PLM-006B) no están en vistas y no existe ningún ir.ui.menu en el módulo."""
         deferred_fields = {
             "storage_profile",
             "putaway_profile",
@@ -245,10 +302,21 @@ class TestAdministrativeViews(TransactionCase):
                 found,
                 f"Deferred fields {found} found in {view_name} view",
             )
-            # Also ensure no menuitem in view xml
+            # Asegurar que no hay etiquetas <menuitem> dentro de los arch
             menu_items = arch.xpath("//menuitem")
             self.assertEqual(
                 len(menu_items),
                 0,
                 f"No <menuitem> elements allowed in {view_name} view arch",
             )
+
+        # Boundary protection: no ir.ui.menu registrado por wms_product_logistics en ir.model.data
+        menu_count = self.env["ir.model.data"].search_count([
+            ("module", "=", "wms_product_logistics"),
+            ("model", "=", "ir.ui.menu"),
+        ])
+        self.assertEqual(
+            menu_count,
+            0,
+            "Module wms_product_logistics must not declare any ir.ui.menu records in PLM-007A",
+        )
