@@ -48,8 +48,17 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
   - Guard de Colisión: Verifica que no existan paquetes visibles con el mismo SSCC generado antes de escribir `name`.
   - RBAC de Intersección: Requiere simultáneamente permiso de escritura sobre `stock.package` (`stock.group_stock_user`) y lectura sobre `wms.sscc.sequence` (`wms_core.group_wms_operator`/supervisor/manager).
 
-### 6. Extensiones WMS Deliberadamente Diferidas (HU-003C+)
-- Motor de etiquetas logísticas GS1 y reportes de impresión/reimpresión (HU-003C).
+### 6. Etiqueta Logística GS1 PDF (`report.wms_handling_unit.report_gs1_logistic_label` — HU-003C1)
+- **Acción y Formato de Reporte**:
+  - Acción: `action_report_gs1_logistic_label` (tipo `qweb-pdf` sobre `stock.package`).
+  - Formato: A6 (105 x 148 mm, Portrait) mediante `paperformat_gs1_logistic_label_a6`.
+  - Contenido mínimo canónico: Título de dato (`SSCC`), símbolo de código de barras **GS1-128** (FNC1 + AI `00` + SSCC-18) e Interpretación Legible por Humanos (**HRI**: `(00)<18 dígitos>`).
+  - Eligibility Guard: Exige `package.valid_sscc == True` en todos los paquetes del recordset; rechazo atómico con `ValidationError` ante cualquier paquete inválido (sin auto-asignaciones implícitas).
+  - Seguridad: Acción disponible para `wms_core.group_wms_operator` (y roles superiores heredados). Modelo técnico `models.AbstractModel` read-only y libre de efectos secundarios.
+
+### 7. Extensiones WMS Deliberadamente Diferidas (HU-003C2+)
+- Etiqueta logística GS1 en formato ZPL para impresoras térmicas directas (HU-003C2).
+- Políticas de impresión/reimpresión y auditoría de eventos de impresión (HU-003C3).
 - Motor de operaciones de empaque atómicas (`pack`, `unpack`, `split`, `merge`).
 - Máquina de estados de ciclo de vida ejecutable.
 - Integración con Work y tareas dirigidas (`current_work_id`, `last_work_id`).
@@ -65,8 +74,10 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
 | **HU-002** | Stock Package WMS Core Metadata (`hu_state`, `hu_class`) | ✅ Merged |
 | **HU-003A** | SSCC-18 Allocation Core (`wms.sscc.sequence`, `next_sscc()`) | ✅ Merged |
 | **HU-003A.1** | Global SSCC Namespace Guard (`UNIQUE(GCP, extension)`) | ✅ Merged |
-| **HU-003B** | Package SSCC Assignment (`stock.package.assign_sscc()`) | ✅ Current |
-| **HU-003C** | GS1 Logistic Label / Print Engine | ⏸ Siguiente |
+| **HU-003B** | Package SSCC Assignment (`stock.package.assign_sscc()`) | ✅ Merged |
+| **HU-003C1** | GS1 Logistic Label PDF — SSCC-only GS1-128 (`qweb-pdf`, A6) | ✅ Current |
+| **HU-003C2** | GS1 Logistic Label ZPL — SSCC-only | ⏸ Diferido |
+| **HU-003C3** | Print/Reprint Policy & Audit | ⏸ Diferido |
 | **HU-004+** | HU Operation Engine (`pack`, `unpack`, `split`, `merge`) | ⏸ Diferido |
 | **HU-005+** | Multi-level Hierarchy & Nesting Validations | ⏸ Diferido |
 

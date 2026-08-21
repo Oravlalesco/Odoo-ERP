@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Paperformat A6 Compacto para Etiqueta Logística GS1 (105 x 148 mm) -->
+    <record id="paperformat_gs1_logistic_label_a6" model="report.paperformat">
+        <field name="name">Etiqueta Logística GS1 A6 (105x148 mm)</field>
+        <field name="default" eval="False"/>
+        <field name="format">custom</field>
+        <field name="page_width">105</field>
+        <field name="page_height">148</field>
+        <field name="orientation">Portrait</field>
+        <field name="margin_top">4</field>
+        <field name="margin_bottom">4</field>
+        <field name="margin_left">4</field>
+        <field name="margin_right">4</field>
+        <field name="header_line" eval="False"/>
+        <field name="header_spacing">0</field>
+        <field name="dpi">96</field>
+    </record>
+
+    <!-- Acción de Reporte PDF Etiqueta Logística GS1 -->
+    <record id="action_report_gs1_logistic_label" model="ir.actions.report">
+        <field name="name">Etiqueta Logística GS1 — SSCC</field>
+        <field name="model">stock.package</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">wms_handling_unit.report_gs1_logistic_label</field>
+        <field name="report_file">wms_handling_unit.report_gs1_logistic_label</field>
+        <field name="print_report_name">'Etiqueta_GS1_' + (object.name or 'SSCC')</field>
+        <field name="binding_model_id" ref="stock.model_stock_package"/>
+        <field name="binding_type">report</field>
+        <field name="paperformat_id" ref="paperformat_gs1_logistic_label_a6"/>
+        <field name="group_ids" eval="[(4, ref('wms_core.group_wms_operator'))]"/>
+    </record>
+</odoo>

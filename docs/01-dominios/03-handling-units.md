@@ -147,7 +147,9 @@ Odoo 19 tiene un campo `valid_sscc` que valida si `name` cumple el algoritmo che
 - **HU-003A**: Se implementa el modelo asignador `wms.sscc.sequence`, que configura y consume un contador transaccional `ir.sequence` estándar para producir identificadores SSCC-18 conformes a GS1 (`extension_digit (1) + GCP (4..12) + serial (12..4) + check_digit (1)`).
 - **HU-003A.1**: Endurecimiento de unicidad global de base de datos (`UNIQUE(gs1_company_prefix, extension_digit)`).
 - **HU-003B**: Asignación explícita e idempotente de identificadores SSCC a paquetes (`stock.package.assign_sscc(sscc_sequence_id)`), reemplazando el `name` genérico del paquete sin campos duplicados.
-- **HU-003C**: Motor de renderizado, impresión y reimpresión de etiquetas logísticas GS1 (diferido).
+- **HU-003C1**: Reporte PDF Etiqueta Logística GS1 (SSCC-only en GS1-128 con FNC1, formato A6 105x148 mm).
+- **HU-003C2**: Etiqueta Logística GS1 en formato ZPL para impresoras térmicas (diferido).
+- **HU-003C3**: Políticas y auditoría de impresión/reimpresión (diferido).
 
 ---
 
@@ -161,6 +163,7 @@ Odoo 19 tiene un campo `valid_sscc` que valida si `name` cumple el algoritmo che
 | `stock.package.type` | **Base completa** de tipo de paquete: dimensiones (`packaging_length`, `width`, `height`), peso, capacidades |
 | `stock.package.history` | Historial nativo de movimientos y traslados físicos de paquetes |
 | `ir.sequence` | Contador transaccional y atómico consumido por `wms.sscc.sequence` |
+| `ir.actions.report` | Infraestructura de renderizado PDF y generador de códigos de barras ReportLab (`barcode()`) |
 
 ### Modelos Extendidos
 
@@ -173,6 +176,7 @@ Odoo 19 tiene un campo `valid_sscc` que valida si `name` cumple el algoritmo che
 | Modelo | Estado | Propósito |
 |---|---|---|
 | `wms.sscc.sequence` | ✅ HU-003A / HU-003A.1 | Asignador de secuencias GS1 SSCC-18 con GCP configurable y contador `ir.sequence` |
+| `report.wms_handling_unit.report_gs1_logistic_label` | ✅ HU-003C1 | Modelo técnico (AbstractModel) para validación de elegibilidad y renderizado de etiqueta GS1 |
 | `wms.hu.operation` | ⏸ Diferido | Historial de operaciones semánticas WMS sobre HU (movimientos físicos cubiertos por `stock.package.history`) |
 
 > **Nota**: Ya **no** se propone `wms.handling.unit` como modelo independiente. La HU ES `stock.package` extendido (ADR-013).
