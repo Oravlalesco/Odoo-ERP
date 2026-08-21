@@ -29,6 +29,7 @@ product.template están implementados desde PLM-002.
     "data": [
         "security/wms_product_logistics_security.xml",
         "security/ir.model.access.csv",
+        "views/wms_product_logistics_views.xml",
     ],
     "installable": True,
     "application": False,

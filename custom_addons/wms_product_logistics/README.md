@@ -18,7 +18,7 @@ It defines the operational and logistical characteristics of products required b
 - Domain strategy profiles (Storage, Putaway, Replenishment, Allocation).
 - Quality inspection triggers and sampling rules.
 
-> **Current Status**: **PLM-006A — Quality Inspection Policy Master**. Política maestra de inspección de calidad (`requires_quality_inspection`, `quality_inspection_type`, `quality_sampling_rate`) implementada sobre `wms.product.logistics`. Strategy profile bindings diferidos a PLM-006B.
+> **Current Status**: **PLM-007A — Administrative Views Foundation**. Vistas administrativas (`list`, `form`, `search`) y acción de ventana (`action_wms_product_logistics`) implementadas para `wms.product.logistics`. Menús y navegación diferidos a PLM-007B e integración con producto a PLM-007C.
 
 ---
 
@@ -101,6 +101,14 @@ product.template (Odoo) ◄─── (1:0..1) ───► wms.product.logistics
   - `0.0` indica sin porcentaje de override estático en el maestro de producto.
 - Los 3 campos son deliberadamente independientes (sin constraints artificiales de combinación).
 
+**Vistas Administrativas (PLM-007A):**
+- `view_wms_product_logistics_list`: vista list nativa Odoo 19 con las 10 columnas operacionales clave.
+- `view_wms_product_logistics_form`: vista form organizada por pestañas con los 25 campos funcionales del modelo.
+  - Protección `options="{'no_create': True, 'no_quick_create': True}"` en campos relacionales configurables (`product_tmpl_id`, `pick_uom_id`, `case_uom_id`, `pallet_uom_id`, `allowed_hu_type_ids`, `default_hu_type_id`).
+  - Declaración explícita de `readonly="1"` en campos computados y relacionados (`company_id`, `active`, `base_qty_per_case`, `cases_per_pallet`, `base_qty_per_pallet`).
+- `view_wms_product_logistics_search`: búsqueda por producto, compañía y clasificaciones, filtros de archivados/calidad y agrupadores.
+- `action_wms_product_logistics`: acción de ventana para gestión del modelo.
+
 - **Odoo 19 Reutilization**:
   - `stock.package` = Instancia física del HU.
   - `stock.package.type` = Catálogo oficial de tipos (dimensiones, peso tara/máximo, `package_use`).
@@ -127,9 +135,11 @@ All items below represent future development stages:
 | **PLM-004** | Classifications & Handling Attributes (ABC, Velocity, Temp, Hazmat, Stack) | ✅ Merged |
 | **PLM-005A** | Shelf-Life Policy Master (`min_shelf_life_receipt_days`, `shipping_days`) | ✅ Merged |
 | **PLM-005B** | HU Type Restrictions (`allowed_hu_type_ids`, `default_hu_type_id`) | ✅ Merged |
-| **PLM-006A** | Quality Inspection Policy Master (`requires_quality_inspection`, `type`, `rate`) | ✅ Current |
+| **PLM-006A** | Quality Inspection Policy Master (`requires_quality_inspection`, `type`, `rate`) | ✅ Merged |
 | **PLM-006B** | Strategy Profile Bindings (`storage`, `putaway`, `replenishment`, `allocation`) | ⏸ Deferred |
-| **PLM-007** | Product Logistics UI & Views | ⏳ Future |
+| **PLM-007A** | Administrative Views Foundation (`list`, `form`, `search`, `action`) | ✅ Current |
+| **PLM-007B** | Navigation & RBAC Exposure (Menus & Access) | ⏳ Next |
+| **PLM-007C** | Product Template Integration (Contextual Action from Product) | ⏳ Future |
 
 ---
 

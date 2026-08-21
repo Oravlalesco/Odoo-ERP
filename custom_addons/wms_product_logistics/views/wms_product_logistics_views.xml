@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ============================================================
+         PLM-007A: Product Logistics Administrative Views
+         List, Form, Search, Action (no menuitem in PLM-007A)
+         ============================================================ -->
+
+    <!-- ==================== List View ==================== -->
+    <record id="view_wms_product_logistics_list" model="ir.ui.view">
+        <field name="name">wms.product.logistics.list</field>
+        <field name="model">wms.product.logistics</field>
+        <field name="arch" type="xml">
+            <list string="Perfiles Logísticos WMS">
+                <field name="product_tmpl_id"/>
+                <field name="company_id"/>
+                <field name="pick_uom_id"/>
+                <field name="case_uom_id"/>
+                <field name="pallet_uom_id"/>
+                <field name="abc_class"/>
+                <field name="velocity_class"/>
+                <field name="temperature_class"/>
+                <field name="requires_quality_inspection"/>
+                <field name="active" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- ==================== Form View ==================== -->
+    <record id="view_wms_product_logistics_form" model="ir.ui.view">
+        <field name="name">wms.product.logistics.form</field>
+        <field name="model">wms.product.logistics</field>
+        <field name="arch" type="xml">
+            <form string="Perfil Logístico WMS">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="product_tmpl_id" string="Producto"/>
+                        <h1>
+                            <field name="product_tmpl_id" options="{'no_create': True, 'no_quick_create': True}"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Identidad">
+                            <field name="company_id" readonly="1"/>
+                            <field name="active" readonly="1"/>
+                        </group>
+                        <group string="UOM Operacionales">
+                            <field name="pick_uom_id" options="{'no_create': True, 'no_quick_create': True}"/>
+                            <field name="case_uom_id" options="{'no_create': True, 'no_quick_create': True}"/>
+                            <field name="pallet_uom_id" options="{'no_create': True, 'no_quick_create': True}"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Packaging &amp; Ti-Hi" name="packaging_tihi">
+                            <group>
+                                <group string="Configuración Ti-Hi">
+                                    <field name="cases_per_layer"/>
+                                    <field name="layers_per_pallet"/>
+                                </group>
+                                <group string="Cantidades Derivadas (Odoo UOM)">
+                                    <field name="base_qty_per_case" readonly="1"/>
+                                    <field name="cases_per_pallet" readonly="1"/>
+                                    <field name="base_qty_per_pallet" readonly="1"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Clasificación &amp; Manejo" name="classification_handling">
+                            <group>
+                                <group string="Clasificaciones Operacionales">
+                                    <field name="abc_class"/>
+                                    <field name="velocity_class"/>
+                                    <field name="temperature_class"/>
+                                    <field name="hazmat_class"/>
+                                </group>
+                                <group string="Atributos de Manejo">
+                                    <field name="stackable"/>
+                                    <field name="max_stack"/>
+                                    <field name="fragile"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Vida Útil &amp; HUs" name="shelf_life_hu">
+                            <group>
+                                <group string="Control de Vida Útil">
+                                    <field name="min_shelf_life_receipt_days"/>
+                                    <field name="min_shelf_life_shipping_days"/>
+                                </group>
+                                <group string="Restricciones de Handling Units (HU)">
+                                    <field name="allowed_hu_type_ids" widget="many2many_tags" options="{'no_create': True, 'no_quick_create': True}"/>
+                                    <field name="default_hu_type_id" options="{'no_create': True, 'no_quick_create': True}"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Calidad" name="quality">
+                            <group string="Política de Inspección de Calidad">
+                                <field name="requires_quality_inspection"/>
+                                <field name="quality_inspection_type"/>
+                                <field name="quality_sampling_rate"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- ==================== Search View ==================== -->
+    <record id="view_wms_product_logistics_search" model="ir.ui.view">
+        <field name="name">wms.product.logistics.search</field>
+        <field name="model">wms.product.logistics</field>
+        <field name="arch" type="xml">
+            <search string="Buscar perfiles logísticos">
+                <field name="product_tmpl_id"/>
+                <field name="company_id"/>
+                <field name="abc_class"/>
+                <field name="velocity_class"/>
+                <field name="temperature_class"/>
+                <field name="hazmat_class"/>
+                <field name="requires_quality_inspection"/>
+                <filter name="inactive" string="Archivados" domain="[('active', '=', False)]"/>
+                <filter name="requires_quality_inspection" string="Requiere inspección" domain="[('requires_quality_inspection', '=', True)]"/>
+                <group>
+                    <filter name="group_company" string="Compañía" context="{'group_by': 'company_id'}"/>
+                    <filter name="group_abc_class" string="Clase ABC" context="{'group_by': 'abc_class'}"/>
+                    <filter name="group_velocity_class" string="Velocidad" context="{'group_by': 'velocity_class'}"/>
+                    <filter name="group_temperature_class" string="Temperatura" context="{'group_by': 'temperature_class'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- ==================== Action ==================== -->
+    <record id="action_wms_product_logistics" model="ir.actions.act_window">
+        <field name="name">Perfiles Logísticos WMS</field>
+        <field name="res_model">wms.product.logistics</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_wms_product_logistics_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Crear un perfil logístico WMS
+            </p>
+            <p>
+                Los perfiles logísticos definen UOM operacionales, configuración de pallet (Ti-Hi),
+                clasificaciones, apilabilidad, vida útil, restricciones de HU y políticas de calidad del producto.
+            </p>
+        </field>
+    </record>
+
+</odoo>

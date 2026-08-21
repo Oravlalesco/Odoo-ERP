@@ -6,3 +6,4 @@ from . import test_operational_classifications
 from . import test_shelf_life_policy
 from . import test_hu_type_restrictions
 from . import test_quality_inspection_policy
+from . import test_administrative_views
