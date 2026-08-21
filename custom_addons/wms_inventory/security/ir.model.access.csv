@@ -3,3 +3,7 @@ access_wms_inventory_block_operator,wms.inventory.block.operator,model_wms_inven
 access_wms_inventory_block_supervisor,wms.inventory.block.supervisor,model_wms_inventory_block,wms_core.group_wms_supervisor,1,1,1,0
 access_wms_inventory_block_manager,wms.inventory.block.manager,model_wms_inventory_block,wms_core.group_wms_manager,1,1,1,0
 access_wms_inventory_block_system,wms.inventory.block.system,model_wms_inventory_block,base.group_system,1,1,1,0
+access_wms_inventory_event_operator,wms.inventory.event.operator,model_wms_inventory_event,wms_core.group_wms_operator,1,0,1,0
+access_wms_inventory_event_supervisor,wms.inventory.event.supervisor,model_wms_inventory_event,wms_core.group_wms_supervisor,1,0,1,0
+access_wms_inventory_event_manager,wms.inventory.event.manager,model_wms_inventory_event,wms_core.group_wms_manager,1,0,1,0
+access_wms_inventory_event_system,wms.inventory.event.system,model_wms_inventory_event,base.group_system,1,0,1,0
