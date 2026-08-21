@@ -200,8 +200,8 @@ La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin mo
 
 La interfaz de usuario del dominio se estructura en tres subfeatures secuenciales:
 - **PLM-007A (Vistas Administrativas — Merged)**: Definición de vistas `list` (10 columnas operacionales), `form` (25 campos funcionales agrupados en 6 pestañas con protección en relaciones), `search` (filtros y agrupadores) y acción de ventana `action_wms_product_logistics`.
-- **PLM-007B (Navegación y RBAC — Current)**: Exposición de menús según ownership boundary (`menu_wms_root` poseído por `wms_core`, `menu_wms_master_data` y `menu_wms_product_logistics` poseídos por `wms_product_logistics`) con validación de visibilidad nativa Odoo y permisos RBAC sin escalación a grupos de Stock.
-- **PLM-007C (Integración con Producto — Future)**: Acceso contextual desde el formulario de `product.template` hacia el perfil WMS correspondiente.
+- **PLM-007B (Navegación y RBAC — Merged)**: Exposición de menús según ownership boundary (`menu_wms_root` poseído por `wms_core`, `menu_wms_master_data` y `menu_wms_product_logistics` poseídos por `wms_product_logistics`) con validación de visibilidad nativa Odoo y permisos RBAC sin escalación a grupos de Stock.
+- **PLM-007C (Integración con Producto — Current)**: Acceso contextual desde el formulario de `product.template` (`product.product_template_only_form_view`) mediante stat button (`oe_stat_button`) y acción contextual dedicada `action_wms_product_logistics_from_product` (`active_test=False`), respetando la relación 1:0..1, el lifecycle de archivado y sin auto-creación ni campos adicionales en el maestro de productos.
 
 ---
 
