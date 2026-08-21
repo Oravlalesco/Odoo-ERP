@@ -22,6 +22,8 @@ de las Handling Units (ADR-013), prohibiendo la creación de modelos paralelos t
     "data": [
         "security/wms_handling_unit_security.xml",
         "security/ir.model.access.csv",
+        "report/gs1_logistic_label_report.xml",
+        "report/gs1_logistic_label_templates.xml",
     ],
     "installable": True,
     "application": False,

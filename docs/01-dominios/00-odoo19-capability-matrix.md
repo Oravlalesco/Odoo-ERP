@@ -142,7 +142,9 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | `valid_sscc` | ✅ Reutilizar | **Ya existe** — campo computed `_compute_valid_sscc()` con encoder SSCC; `name` se usa como referencia SSCC |
 | SSCC-18 Allocator (`wms.sscc.sequence`) | 🔧 HU-003A / HU-003A.1 | Modelo asignador GS1 SSCC-18 sobre `ir.sequence` transaccional con guard global |
 | Package SSCC Binding (`assign_sscc()`) | 🔧 HU-003B | Asignación explícita e idempotente de SSCC a `stock.package.name` |
-| GS1 Label Engine | ⏸ HU-003C | Motor de renderizado e impresión de etiquetas logísticas GS1 (diferido) |
+| GS1 Logistic Label PDF (`report_gs1_logistic_label`) | 🔧 HU-003C1 | Etiqueta logística GS1 PDF SSCC-only en GS1-128 (A6 105x148 mm) |
+| GS1 Logistic Label ZPL | ⏸ HU-003C2 | Etiqueta logística GS1 en formato ZPL para térmicas (diferido) |
+| Print/Reprint Policy & Audit | ⏸ HU-003C3 | Auditoría y políticas de reimpresión de etiquetas (diferido) |
 | HU lifecycle (`hu_state`) | 🔧 HU-002 | Metadata persistida (`EMPTY..DISPOSED`, nullable); motor de transiciones diferido |
 | `seal_number` | ⏸ Diferido | Número de sello (diferido) |
 | `hu_class` | 🔧 HU-002 | Clasificación operacional (`PALLET`, `CASE`, `TOTE`, `CONTAINER`, `MIXED`) |

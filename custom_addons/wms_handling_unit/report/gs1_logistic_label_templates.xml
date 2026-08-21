@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <template id="report_gs1_logistic_label">
+        <t t-call="web.basic_layout">
+            <t t-foreach="docs" t-as="package">
+                <div class="page" style="page-break-after: always; font-family: sans-serif; padding: 1mm;">
+                    <div style="border: 1.5pt solid #000; padding: 3mm; box-sizing: border-box; width: 95mm; margin: 0 auto;">
+                        <!-- Data Title: SSCC -->
+                        <div style="border-bottom: 1.5pt solid #000; padding-bottom: 2mm; margin-bottom: 15mm;">
+                            <span style="font-size: 14pt; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
+                                SSCC
+                            </span>
+                        </div>
+
+                        <!-- GS1-128 Barcode Symbol and Human Readable Interpretation (HRI) -->
+                        <div style="text-align: center; margin-top: 10mm; margin-bottom: 5mm;">
+                            <img t-att-src="get_barcode_base64(package.name)" alt="GS1-128 SSCC Barcode" style="width: 90mm; height: 32mm; display: block; margin: 0 auto;"/>
+                            <div style="font-size: 14pt; font-family: monospace; font-weight: bold; margin-top: 3mm; letter-spacing: 2px;">
+                                <t t-esc="get_hri(package.name)"/>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>
