@@ -196,6 +196,13 @@ La UOM base del producto (`product.template.uom_id`) se reutiliza de Odoo sin mo
 
 > **Decisión Arquitectónica:** Los enlaces a perfiles de estrategia (`storage_profile`, `putaway_profile`, `replenishment_profile`, `allocation_profile`) quedan formalmente diferidos a **PLM-006B (Deferred)**. No se persisten campos ni modelos placeholder hasta que existan las entidades reales de sus respectivos dominios (ej. `wms.putaway.strategy`, `wms.replenishment.rule`) y el Typed Policy Engine (ADR-009/ADR-018).
 
+### Vistas y UI (PLM-007)
+
+La interfaz de usuario del dominio se estructura en tres subfeatures secuenciales:
+- **PLM-007A (Vistas Administrativas)**: Definición de vistas `list` (10 columnas operacionales), `form` (25 campos funcionales agrupados con protección en relaciones), `search` (filtros y agrupadores) y acción de ventana `action_wms_product_logistics`.
+- **PLM-007B (Navegación y RBAC)**: Exposición controlada de menús y validación de visibilidad según roles WMS.
+- **PLM-007C (Integración con Producto)**: Acceso contextual desde el formulario de `product.template` hacia el perfil WMS correspondiente.
+
 ---
 
 ## Relación con Odoo
