@@ -26,7 +26,7 @@ class TestHandlingUnitModuleInstallation(TransactionCase):
     def test_hu_02_native_foundation_and_dependencies(self):
         """TEST-HU-002: dependencias instaladas, modelos en registry, campos nativos de HU y no modelo paralelo."""
         # 1. Módulos dependientes instalados
-        for dep_name in ["wms_core", "wms_warehouse_master", "wms_product_logistics", "stock"]:
+        for dep_name in ["wms_core", "wms_warehouse_master", "wms_product_logistics", "wms_inventory", "stock"]:
             dep_mod = self.env["ir.module.module"].search(
                 [("name", "=", dep_name)], limit=1
             )

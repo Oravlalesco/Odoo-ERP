@@ -92,17 +92,26 @@ stateDiagram-v2
 
 ### Operaciones sobre HU
 
-| Operación | En inglés | Significado | Genera Work |
+| Operación | En inglés | Significado | Implementación WMS |
 |---|---|---|---|
-| **Crear** | Create | Registrar una HU nueva en el sistema | No |
-| **Empacar** | Pack | Agregar contenido a la HU | Sí |
-| **Desempacar** | Unpack | Retirar contenido de la HU | Sí |
-| **Dividir** | Split | Dividir una HU en dos o más | Sí |
-| **Consolidar** | Merge | Combinar contenido de dos HU en una | Sí |
-| **Cerrar** | Close | Sellar, pesar, etiquetar | Sí |
-| **Reabrir** | Reopen | Abrir HU sellada para inspección o corrección | Sí (con autorización) |
-| **Mover** | Move | Mover la HU completa a otra ubicación | Sí |
-| **Disponer** | Dispose | Dar de baja la HU (destruir, reciclar) | No |
+| **Crear** | Create | Registrar una HU nueva en el sistema | `stock.package.create()` nativo Odoo |
+| **Empacar** | Pack | Agregar contenido a la HU | `stock.package._wms_pack_physical()` (HU-004A, ADR-019) |
+| **Desempacar** | Unpack | Retirar contenido de la HU | `stock.package.unpack()` nativo / `_wms_unpack_physical()` (HU-004B) |
+| **Dividir** | Split | Dividir una HU en dos o más | ⏸ Diferido |
+| **Consolidar** | Merge | Combinar contenido de dos HU en una | ⏸ Diferido |
+| **Cerrar** | Close | Sellar, pesar, etiquetar | ⏸ Diferido |
+| **Reabrir** | Reopen | Abrir HU sellada para inspección o corrección | ⏸ Diferido |
+| **Mover** | Move | Mover la HU completa a otra ubicación | `stock.quant.move_quants()` nativo Odoo |
+| **Disponer** | Dispose | Dar de baja la HU (destruir, reciclar) | ⏸ Diferido |
+
+#### Empaque Físico Transaccional (`_wms_pack_physical` — HU-004A)
+
+Physical Pack reutiliza el mecanismo nativo de direct quant relocation de Odoo 19 pinned, que materializa un `stock.move`/`stock.move.line` (`is_inventory=True`, `inventory_name="WMS Physical Pack"`) y ejecuta `_action_done()`, generando automáticamente el registro en `stock.package.history`.
+
+Garantías del primitive:
+- **Transición de ciclo de vida**: `EMPTY -> OPEN`, `OPEN -> OPEN`, adopción de paquete vacío (`False -> OPEN`).
+- **Atomicidad ADR-019**: `stock.move` + `stock.quant` + `stock.package.history` + `wms.inventory.event` (PACK) + `wms.outbox` (`inventory.hu.packed`, schema v1) persisten de forma atómica en una única transacción PostgreSQL.
+- **Frontera de privilegios (Narrow Sudo)**: Los guards operacionales, de compañía, de bloqueo (`wms.inventory.block`) y PLM (`wms.product.logistics`) ejecutan en el entorno del operador original. La mutación física y actualización de `hu_state` ejecutan bajo narrow sudo, preservando `event.operator_id` con la identidad real del operador.
 
 La trazabilidad de movimientos físicos de paquetes ya está cubierta de forma nativa por `stock.package.history` en Odoo 19. Para registrar eventos semánticos WMS adicionales (pack, unpack, split, merge), un futuro modelo `wms.hu.operation` (diferido) podrá capturar:
 

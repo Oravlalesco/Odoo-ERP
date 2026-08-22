@@ -74,11 +74,14 @@ Condiciones que el WMS prohíbe en operaciones normales pero que Odoo puede perm
 | Operación | Boundary | Tablas tocadas | SLO |
 |---|---|---|---|
 | **Claim Work** | 1 transacción atómica | `wms_work` | < 50ms p99 |
+| **Physical Pack** | 1 transacción atómica | `stock_quant`, `stock_move`, `stock_move_line`, `stock_package`, `stock_package_history`, `wms_inventory_event`, `wms_outbox` | < 200ms p99 |
 | **Confirm Pick** | 1 transacción atómica | `stock_quant`, `stock_move_line`, `wms_work_line`, `wms_inventory_event`, `wms_outbox` | < 200ms p99 |
 | **Confirm Put** | 1 transacción atómica | `stock_quant`, `stock_move_line`, `wms_work_line`, `wms_inventory_event`, `wms_outbox` | < 200ms p99 |
 | **Heartbeat** | 1 transacción atómica | `wms_work` (solo `last_heartbeat_at`, `lease_expires_at`) | < 20ms p99 |
 | **Scan Location** | Sin transacción (lectura) | — | < 50ms p99 |
 | **Scan Product** | Sin transacción (lectura) | — | < 50ms p99 |
+
+> ℹ️ **Nota sobre Physical Pack (HU-004A)**: HU-004A implementa el primitive transaccional interno (`_wms_pack_physical`); su exposición como comando RF/API público está diferida a la incorporación del wrapper de idempotencia con `command_id`.
 
 ### Operaciones de Planificación (segundos)
 
