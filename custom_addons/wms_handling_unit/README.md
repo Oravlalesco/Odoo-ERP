@@ -56,13 +56,23 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
   - Eligibility Guard: Exige `package.valid_sscc == True` en todos los paquetes del recordset; rechazo atómico con `ValidationError` ante cualquier paquete inválido (sin auto-asignaciones implícitas).
   - Seguridad: Acción disponible para `wms_core.group_wms_operator` (y roles superiores heredados). Modelo técnico `models.AbstractModel` read-only y libre de efectos secundarios.
 
-### 7. Extensiones WMS Deliberadamente Diferidas (HU-003C2+)
+### 7. Empaque Físico Transaccional (`stock.package._wms_pack_physical` — HU-004A)
+- **Primitive Físico Privado `_wms_pack_physical(quant_id, quantity, correlation_id=None)`**:
+  - Primer consumidor end-to-end de ADR-019 (mutación física + journal + outbox en una sola transacción PostgreSQL).
+  - Mutación física: Reutiliza el mecanismo nativo de relocalización directa de quants de Odoo 19 (`_get_inventory_move_values` + `_action_done()`), preservando la trazabilidad nativa de `stock.move`, `stock.move.line` y `stock.package.history`.
+  - Transición de ciclo de vida: `EMPTY -> OPEN`, `OPEN -> OPEN`, adopción de paquete vacío (`False -> OPEN`).
+  - Guards estrictos: Scope top-level plano (rechaza anidamiento), validaciones UoM, quants sueltos sin reservas, productos tracked/serial, bloqueos de inventario (`wms.inventory.block`) y tipos de HU permitidos por perfil logístico PLM (`wms.product.logistics`).
+  - Persistencia atómica de eventos: Registra `wms.inventory.event` (`PACK`) y `wms.outbox` (`inventory.hu.packed`, schema v1) compartiendo el mismo `correlation_id` mediante `_append_events_with_outbox()`.
+  - Frontera de privilegios (Narrow Sudo): Guards y registro de eventos operan en el entorno del operador original (`operator_id` no superuser); la mutación física de stock y transición de `hu_state` ejecutan bajo narrow sudo.
+
+### 8. Extensiones WMS Deliberadamente Diferidas (HU-004B+)
+- Operación de desempaque físico (`unpack` — HU-004B).
 - Etiqueta logística GS1 en formato ZPL para impresoras térmicas directas (HU-003C2).
 - Políticas de impresión/reimpresión y auditoría de eventos de impresión (HU-003C3).
-- Motor de operaciones de empaque atómicas (`pack`, `unpack`, `split`, `merge`).
-- Máquina de estados de ciclo de vida ejecutable.
+- Operaciones de división y consolidación (`split`, `merge`).
+- Máquina de estados de ciclo de vida ejecutable completa (close, reopen, dispatch).
 - Integración con Work y tareas dirigidas (`current_work_id`, `last_work_id`).
-- Eventos operacionales de inventario y Outbox atómico (ADR-019).
+- Validaciones de jerarquía multi-nivel y anidamiento dinámico (HU-005+).
 
 ---
 
@@ -75,10 +85,12 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
 | **HU-003A** | SSCC-18 Allocation Core (`wms.sscc.sequence`, `next_sscc()`) | ✅ Merged |
 | **HU-003A.1** | Global SSCC Namespace Guard (`UNIQUE(GCP, extension)`) | ✅ Merged |
 | **HU-003B** | Package SSCC Assignment (`stock.package.assign_sscc()`) | ✅ Merged |
-| **HU-003C1** | GS1 Logistic Label PDF — SSCC-only GS1-128 (`qweb-pdf`, A6) | ✅ Current |
+| **HU-003C1** | GS1 Logistic Label PDF — SSCC-only GS1-128 (`qweb-pdf`, A6) | ✅ Merged |
 | **HU-003C2** | GS1 Logistic Label ZPL — SSCC-only | ⏸ Diferido |
 | **HU-003C3** | Print/Reprint Policy & Audit | ⏸ Diferido |
-| **HU-004+** | HU Operation Engine (`pack`, `unpack`, `split`, `merge`) | ⏸ Diferido |
+| **HU-004A** | Physical Pack Core (`_wms_pack_physical()`, ADR-019) | 🔧 Current |
+| **HU-004B** | Physical Unpack Core (`_wms_unpack_physical()`) | ⏭ Next |
+| **HU-004C+** | HU Operation Engine (`split`, `merge`, `close`, `reopen`) | ⏸ Diferido |
 | **HU-005+** | Multi-level Hierarchy & Nesting Validations | ⏸ Diferido |
 
 ---
@@ -88,4 +100,5 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
 - `wms_core`: Base y framework de seguridad/RBAC del WMS.
 - `wms_warehouse_master`: Autoridad topológica WMS y semántica de ubicaciones (`wms_location_role`).
 - `wms_product_logistics`: Perfiles logísticos de producto y tipos de HU permitidos/por defecto (`allowed_hu_type_ids`, `default_hu_type_id`).
+- `wms_inventory`: Journal de eventos de inventario (`wms.inventory.event`), outbox transaccional (`wms.outbox`), bloqueos de inventario (`wms.inventory.block`) y primitive de boundary atómico.
 - `stock`: Módulo estándar de inventario y paquetes de Odoo (`stock.package`, `stock.package.type`, `stock.quant`, `stock.location`).

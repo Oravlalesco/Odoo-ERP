@@ -147,7 +147,8 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | GS1 Logistic Label PDF (`report_gs1_logistic_label`) | 🔧 HU-003C1 | Etiqueta logística GS1 PDF SSCC-only en GS1-128 (A6 105x148 mm) |
 | GS1 Logistic Label ZPL | ⏸ HU-003C2 | Etiqueta logística GS1 en formato ZPL para térmicas (diferido) |
 | Print/Reprint Policy & Audit | ⏸ HU-003C3 | Auditoría y políticas de reimpresión de etiquetas (diferido) |
-| HU lifecycle (`hu_state`) | 🔧 HU-002 | Metadata persistida (`EMPTY..DISPOSED`, nullable); motor de transiciones diferido |
+| Physical Pack Primitive (`_wms_pack_physical()`) | 🔧 HU-004A | Primitive físico transaccional reutilizando direct quant relocation nativo de Odoo 19 con ADR-019 atómico |
+| HU lifecycle (`hu_state`) | 🔧 HU-002 | Metadata persistida (`EMPTY..DISPOSED`, nullable); mutación a `OPEN` en comandos físicos (HU-004A) |
 | `seal_number` | ⏸ Diferido | Número de sello (diferido) |
 | `hu_class` | 🔧 HU-002 | Clasificación operacional (`PALLET`, `CASE`, `TOTE`, `CONTAINER`, `MIXED`) |
 | Work references | ⏸ Diferido | Enlace a `wms.work` (diferido) |
