@@ -227,3 +227,42 @@ class WmsInventoryEvent(models.Model):
             prepared_vals.append(v)
 
         return super().create(prepared_vals)
+
+    # -------------------------------------------------------------------------
+    # API privada de coordinación atómica Event + Outbox (INV-010B)
+    # -------------------------------------------------------------------------
+
+    @api.model
+    def _append_events_with_outbox(
+        self,
+        event_vals_list,
+        messages,
+        correlation_id=None,
+    ):
+        """Insertar eventos en el journal y encolar mensajes en el outbox con un mismo correlation_id.
+
+        Coordina de forma atómica la persistencia de wms.inventory.event y wms.outbox
+        dentro de la transacción PostgreSQL existente del caller (ADR-019 / CORE-003 / CORE-004).
+
+        :param event_vals_list: list[dict] con 1..N eventos a crear vía _append_events().
+        :param messages: list[dict] con 1..N mensajes a encolar vía _enqueue_messages().
+        :param correlation_id: str opcional no vacío. Si es None, se genera un UUID4 único
+                               compartido para ambos batches.
+        :return: tuple (events_recordset, outbox_recordset)
+        """
+        if correlation_id is not None:
+            if not isinstance(correlation_id, str) or not correlation_id.strip():
+                raise ValidationError("correlation_id debe ser una cadena de texto no vacía.")
+            correlation = correlation_id.strip()
+        else:
+            correlation = str(uuid.uuid4())
+
+        events = self._append_events(
+            event_vals_list,
+            correlation_id=correlation,
+        )
+        outbox = self.env["wms.outbox"]._enqueue_messages(
+            messages,
+            correlation_id=correlation,
+        )
+        return events, outbox

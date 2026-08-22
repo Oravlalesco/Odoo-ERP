@@ -72,8 +72,17 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
   - `_enqueue_messages(messages, correlation_id=None)`: Asigna de forma server-owned `created_at` (mismo timestamp para todo el batch), `correlation_id` (UUID4 común o explícito no vacío), `message_id` (UUID4 único por fila), e inicializa obligatoriamente en `status='PENDING'`, `attempt_count=0`, `next_attempt_at=False`, `published_at=False`, `last_error=False`. Ejecuta una única creación multi-record ORM sin `sudo`.
 - **Frontera Arquitectónica y ADR-019**:
   - INV-010A implementa el núcleo de persistencia del Outbox como base para entrega at-least-once.
-  - **ADR-019 no queda completado en este slice**: Se dispone de persistencia de eventos (INV-008) y de outbox (INV-010A), pero la frontera transaccional atómica que combine mutación física de stock + evento + outbox se implementará en INV-010B.
   - Cero dispatcher, locking, retry, DLQ o conexión a RabbitMQ en este slice (diferidos a infraestructura asíncrona).
+
+### 7. Boundary Transaccional Atómico Event + Outbox (`_append_events_with_outbox` — INV-010B)
+- **API Privada de Coordinación**:
+  - `_append_events_with_outbox(event_vals_list, messages, correlation_id=None)` en `wms.inventory.event`.
+  - Genera o normaliza un único `correlation_id` (UUID4 o explícito no vacío) compartido por ambos batches.
+  - Delega secuencialmente a `_append_events()` y `_enqueue_messages()` dentro de la transacción PostgreSQL existente del caller.
+- **Garantías Transaccionales y Límites de ADR-019**:
+  - Cero administración interna de transacciones: prohíbe `commit()`, `rollback()`, `savepoint()`, creación de cursores o `sudo()`.
+  - La transacción PostgreSQL pertenece al command handler que ejecuta la mutación física de stock. Si Outbox falla, Event y la mutación de stock se revierten conjuntamente por ACID.
+  - **Frontera de Cumplimiento**: INV-010B completa el primitive de infraestructura para registro atómico. La demostración de cumplimiento end-to-end de ADR-019 (CORE-003 + CORE-004) se materializa en cada comando físico de dominio (próximo: HU-004A Physical Pack).
 
 ---
 
@@ -90,8 +99,8 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 | **INV-007** | Location-Role Operational Eligibility & Allocation Integration | ⏸ Diferido |
 | **INV-008** | Operational Event Journal Core (`wms.inventory.event`) | ✅ Merged |
 | **INV-009** | Audit Log (`wms.audit.log`) | ⏸ Diferido |
-| **INV-010A** | Transactional Outbox Persistence Core (`wms.outbox`) | 🔧 Current |
-| **INV-010B** | Atomic Event + Outbox Boundary | ⏭ Siguiente Prerrequisito |
+| **INV-010A** | Transactional Outbox Persistence Core (`wms.outbox`) | ✅ Merged |
+| **INV-010B** | Atomic Event + Outbox Boundary | 🔧 Current |
 
 
 ---

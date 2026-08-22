@@ -54,7 +54,9 @@ No permitiremos que otros sistemas accedan directamente al ORM de Odoo. Las razo
 
 > [!NOTE]
 > **Frontera de Entrega y ADR-019 (v1.2)**:
-> INV-010A provee el núcleo de persistencia transaccional del Outbox. La frontera atómica que une mutación física de stock + `wms.inventory.event` + `wms.outbox` en una sola transacción se implementa en **INV-010B**.
+> INV-010A proveyó el núcleo de persistencia transaccional del Outbox (`_enqueue_messages`).
+> **INV-010B** introduce la API de coordinación atómica `_append_events_with_outbox()` para persistir Event + Outbox dentro del transaction boundary que posee el comando físico de stock.
+> La demostración end-to-end de ADR-019 (mutación real de stock + Event + Outbox) se materializa en los comandos físicos de dominio (próximo: HU-004A).
 > La entrega real de mensajes (dispatcher en background, RabbitMQ, políticas de reintento y transiciones a `SENT`/`DEAD`) constituye la capa asíncrona posterior.
 
 
