@@ -285,10 +285,33 @@ Detalle en [Auditoría](../03-plataforma/05-auditoria.md).
 - **Inmutabilidad**: `create()`, `write()` y `unlink()` públicos bloqueados con `UserError`.
 - **Frontera con ADR-019**:
   - INV-010A provee la persistencia del outbox.
-  - La frontera transaccional atómica (`Stock Mutation + wms.inventory.event + wms.outbox`) dentro de un único boundary se completará en **INV-010B**.
   - Los componentes de despacho (RabbitMQ, retry, DLQ, background workers) continúan diferidos.
 
-Detalle en [Integración](../03-plataforma/01-integracion.md).
+### 4. Boundary Transaccional Atómico Event + Outbox (`_append_events_with_outbox` — INV-010B)
+
+**Propósito**: Coordinar la persistencia atómica del Journal Operacional (`wms.inventory.event`) y del Outbox Transaccional (`wms.outbox`) bajo un mismo identificador de correlación (`correlation_id`) dentro del transaction boundary que posee la operación física del WMS (ADR-019 / CORE-003 / CORE-004).
+
+```text
+Physical WMS Command (Caller)
+       │
+       │ ya posee la transacción PostgreSQL
+       │
+       ├── Mutación de stock (vía ORM nativo de Odoo)
+       │
+       └── _append_events_with_outbox(...)
+              │
+              ├── _append_events(...)       → wms.inventory.event
+              │
+              └── _enqueue_messages(...)    → wms.outbox
+```
+
+**Contrato Arquitectónico**:
+- **API Privada**: `wms.inventory.event._append_events_with_outbox(event_vals_list, messages, correlation_id=None)`.
+- **Correlación Única**: Genera un único UUID4 compartido para ambos modelos si `correlation_id=None`, o valida y normaliza el `correlation_id` explícito no vacío.
+- **Caller Ownership de Transacción**: El helper **no administra** transacciones (`commit`, `rollback`, `savepoint` o cursores independientes estrictamente prohibidos). Si la inserción en el Outbox falla, toda la transacción (incluyendo la mutación de inventario y los eventos del journal) se revierte por ACID.
+- **Sin elevación de privilegios**: Prohibido el uso de `sudo()`; preserva íntegramente las ACLs y record rules de seguridad RBAC y multi-compañía.
+
+Detalle en [Integración](../03-plataforma/01-integracion.md) y [Transaction Architecture](../03-plataforma/00-transaction-architecture.md).
 
 ---
 

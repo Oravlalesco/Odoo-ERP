@@ -41,6 +41,11 @@ Condiciones que la plataforma garantiza a nivel de base de datos:
 | CORE-005 | Cada `wms.allocation` tiene al menos un quant válido | Allocation sin stock → pick imposible |
 | CORE-006 | `claim_token` de `wms.work` es único | Previene race conditions en re-claim |
 
+> [!IMPORTANT]
+> **Boundary de Coordinación Atómica (`_append_events_with_outbox` — INV-010B)**:
+> La persistencia conjunta de `wms.inventory.event` y `wms.outbox` se realiza a través de la API privada `_append_events_with_outbox()`.
+> El helper **no administra la transacción**: tiene estrictamente prohibido ejecutar `commit()`, `rollback()`, `savepoint()`, instanciar cursores independientes o invocar `sudo()`. La transacción PostgreSQL pertenece al command handler de la operación física; si Outbox o Event fallan, la mutación completa de inventario se revierte atómicamente.
+
 ### Políticas WMS (enforced por el WMS, no por Odoo)
 
 Condiciones que el WMS prohíbe en operaciones normales pero que Odoo puede permitir:
