@@ -61,6 +61,20 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
   - INV-008 crea la persistencia append-only del journal, pero **ADR-019 todavía no se considera satisfecho** hasta que exista el Outbox (INV-010) y el boundary de mutación cree Event + Outbox dentro de la misma transacción.
   - Cero hooks automáticos sobre `stock.quant` o `stock.move`. Los eventos se emitirán desde comandos operacionales WMS explícitos.
 
+### 6. Bandeja de Salida Transaccional (`wms.outbox` — INV-010A)
+- **Persistencia Domain-Neutral**:
+  - Exactamente 12 campos funcionales: `company_id`, `message_id`, `created_at`, `event_name`, `schema_version`, `payload`, `correlation_id`, `status`, `attempt_count`, `next_attempt_at`, `published_at`, `last_error`.
+  - Sin claves foráneas a modelos de dominio (`quant_id`, `stock_move_id`, `package_id`, `inventory_event_id`).
+  - Unicidad global de DB sobre `message_id` (UUID4 server-owned) para deduplicación por consumidores downstream.
+  - Validación estricta: `schema_version > 0`, `attempt_count >= 0`, `payload` tipo dict (JSON).
+  - Inmutabilidad server-side: `create()` directo, `write()` y `unlink()` bloqueados con `UserError`.
+- **API Privada de Inserción Batch**:
+  - `_enqueue_messages(messages, correlation_id=None)`: Asigna de forma server-owned `created_at` (mismo timestamp para todo el batch), `correlation_id` (UUID4 común o explícito no vacío), `message_id` (UUID4 único por fila), e inicializa obligatoriamente en `status='PENDING'`, `attempt_count=0`, `next_attempt_at=False`, `published_at=False`, `last_error=False`. Ejecuta una única creación multi-record ORM sin `sudo`.
+- **Frontera Arquitectónica y ADR-019**:
+  - INV-010A implementa el núcleo de persistencia del Outbox como base para entrega at-least-once.
+  - **ADR-019 no queda completado en este slice**: Se dispone de persistencia de eventos (INV-008) y de outbox (INV-010A), pero la frontera transaccional atómica que combine mutación física de stock + evento + outbox se implementará en INV-010B.
+  - Cero dispatcher, locking, retry, DLQ o conexión a RabbitMQ en este slice (diferidos a infraestructura asíncrona).
+
 ---
 
 ## Hoja de Ruta del Dominio de Inventario
@@ -74,9 +88,11 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 | **INV-005** | Operational Block Batch Matching API (`get_blocked_quants`) | ✅ Merged |
 | **INV-006** | Aggregate Block-Aware Availability Engine (`strict=False`) | ✅ Merged |
 | **INV-007** | Location-Role Operational Eligibility & Allocation Integration | ⏸ Diferido |
-| **INV-008** | Operational Event Journal Core (`wms.inventory.event`) | 🔧 Current |
+| **INV-008** | Operational Event Journal Core (`wms.inventory.event`) | ✅ Merged |
 | **INV-009** | Audit Log (`wms.audit.log`) | ⏸ Diferido |
-| **INV-010** | Integration Outbox (`wms.outbox`) | ⏸ Siguiente Prerrequisito |
+| **INV-010A** | Transactional Outbox Persistence Core (`wms.outbox`) | 🔧 Current |
+| **INV-010B** | Atomic Event + Outbox Boundary | ⏭ Siguiente Prerrequisito |
+
 
 ---
 

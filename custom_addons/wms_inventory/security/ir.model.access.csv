@@ -7,3 +7,8 @@ access_wms_inventory_event_operator,wms.inventory.event.operator,model_wms_inven
 access_wms_inventory_event_supervisor,wms.inventory.event.supervisor,model_wms_inventory_event,wms_core.group_wms_supervisor,1,0,1,0
 access_wms_inventory_event_manager,wms.inventory.event.manager,model_wms_inventory_event,wms_core.group_wms_manager,1,0,1,0
 access_wms_inventory_event_system,wms.inventory.event.system,model_wms_inventory_event,base.group_system,1,0,1,0
+access_wms_outbox_operator,wms.outbox.operator,model_wms_outbox,wms_core.group_wms_operator,0,0,1,0
+access_wms_outbox_supervisor,wms.outbox.supervisor,model_wms_outbox,wms_core.group_wms_supervisor,0,0,1,0
+access_wms_outbox_manager,wms.outbox.manager,model_wms_outbox,wms_core.group_wms_manager,1,1,1,0
+access_wms_outbox_system,wms.outbox.system,model_wms_outbox,base.group_system,1,1,1,0
+

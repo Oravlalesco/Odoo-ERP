@@ -263,9 +263,30 @@ Si `stock.quant` cambia pero `wms.inventory.event` no se crea, el journal deja d
 
 Detalle en [Auditoría](../03-plataforma/05-auditoria.md).
 
-### 3. Integration Outbox (`wms.outbox`)
+### 3. Integration Outbox (`wms.outbox` — INV-010A)
 
-**Propósito**: Eventos que deben notificarse a sistemas externos (ERP, TMS, BI). Se persiste atómicamente con la acción, se consume asincrónicamente por integration workers.
+**Propósito**: Bandeja de salida transaccional para eventos que deben notificarse asíncronamente a sistemas externos (ERP, TMS, BI) como base para entrega at-least-once.
+
+**Características de Persistencia (INV-010A)**:
+- **Domain-neutral**: Modelo desacoplado sin FKs a `stock.quant`, `stock.move`, `stock.package` ni `wms.inventory.event`.
+- **Estructura (12 campos funcionales exactos)**:
+  - `company_id`: Compañía obligatoria (sin default).
+  - `message_id`: UUID4 server-owned con constraint DB `UNIQUE(message_id)` para deduplicación por consumidores.
+  - `created_at`: Datetime server-owned (común a todo el batch).
+  - `event_name`: Nombre formal del evento (ej: `inventory.item_received`).
+  - `schema_version`: Versión de contrato (entero strictly `> 0`).
+  - `payload`: Diccionario estructurado (JSON).
+  - `correlation_id`: Identificador de correlación transaccional (UUID4 común o explícito no vacío).
+  - `status`: Estado del mensaje (`PENDING`, `SENT`, `DEAD`; en INV-010A sólo se crea `PENDING`).
+  - `attempt_count`: Intentos de entrega (`>= 0`, inicial 0).
+  - `next_attempt_at`, `published_at`, `last_error`: Metadatos de delivery (inicialmente vacíos).
+- **API Privada de Inserción Batch**:
+  - `_enqueue_messages(messages, correlation_id=None)`: Encola en una única creación multi-record ORM asignando metadatos server-owned y validando tipos estrictos.
+- **Inmutabilidad**: `create()`, `write()` y `unlink()` públicos bloqueados con `UserError`.
+- **Frontera con ADR-019**:
+  - INV-010A provee la persistencia del outbox.
+  - La frontera transaccional atómica (`Stock Mutation + wms.inventory.event + wms.outbox`) dentro de un único boundary se completará en **INV-010B**.
+  - Los componentes de despacho (RabbitMQ, retry, DLQ, background workers) continúan diferidos.
 
 Detalle en [Integración](../03-plataforma/01-integracion.md).
 

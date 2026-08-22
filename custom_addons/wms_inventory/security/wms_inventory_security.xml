@@ -21,4 +21,14 @@
         <field name="domain_force">[('company_id', 'in', company_ids)]</field>
     </record>
 
+    <!-- ============================================================
+         INV-010A: Regla de registro multi-compañía para Outbox Transaccional
+         ============================================================ -->
+
+    <record id="rule_wms_outbox_company" model="ir.rule">
+        <field name="name">Bandeja de Salida WMS: multi-compañía</field>
+        <field name="model_id" ref="model_wms_outbox"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+
 </odoo>
