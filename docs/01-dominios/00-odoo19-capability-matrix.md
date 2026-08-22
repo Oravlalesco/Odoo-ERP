@@ -89,6 +89,7 @@ Alternativas para implementar estados operacionales WMS:
 | Damage | Mover a ubicación tipo `DAMAGE` | `stock.location` (tipo) |
 | Operational Block | Bloqueo lógico por dimensiones (`wms.inventory.block`). Persistencia/RBAC (INV-002), Matching API (INV-003), Availability Guard (INV-004), Batch Matching (INV-005), Aggregate Block-Aware Availability (INV-006); Allocation/Reservation diferido. | 🆕 Crear WMS |
 | Operational Event Journal | Journal operacional append-only (`wms.inventory.event`). Persistencia, schema 13 campos, 7 event types, RBAC y API privada `_append_events()` (INV-008). | 🆕 Crear WMS |
+| Transactional Outbox | Bandeja de salida transaccional (`wms.outbox`). Persistencia domain-neutral, 12 campos funcionales, RBAC y API privada `_enqueue_messages()` (INV-010A). | 🆕 Crear WMS |
 | Reservation Context | `stock.move` / `stock.move.line` / `wms.allocation` | Modelos existentes + nuevo |
 
 Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) en vez de luchar contra ella.

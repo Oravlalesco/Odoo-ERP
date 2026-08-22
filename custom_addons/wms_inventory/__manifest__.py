@@ -9,8 +9,10 @@ Módulo del dominio de inventario del Kernel WMS (Fase 5):
 - stock.quant como única fuente de verdad del inventario.
 - stock.move / stock.move.line reutilizados para intención y detalle físico de movimiento.
 - wms_location_role de wms_warehouse_master aportando semántica operativa por ubicación sin extender stock.location.usage.
-- wms.inventory.block: Bloqueos operacionales inmutables por dimensiones lógicas con RBAC.
-- Diario de eventos (wms.inventory.event), auditoría, integración outbox y motores de disponibilidad diferidos.
+- wms.inventory.block: Bloqueos operacionales inmutables por dimensiones lógicas con RBAC y motores de disponibilidad.
+- wms.inventory.event: Diario operacional inmutable (append-only) de eventos de inventario WMS.
+- wms.outbox: Bandeja de salida transaccional WMS (persistencia domain-neutral, base de entrega asíncrona at-least-once).
+- Auditoría (wms.audit.log) y dispatcher asíncrono diferidos.
     """,
     "author": "WMS Project",
     "version": "19.0.1.0.0",

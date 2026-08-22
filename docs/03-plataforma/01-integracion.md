@@ -45,12 +45,18 @@ No permitiremos que otros sistemas accedan directamente al ORM de Odoo. Las razo
 | Componente | En inglés | Significado |
 |---|---|---|
 | **Bandeja de entrada** | Inbox | Cola de mensajes recibidos de sistemas externos, procesados de forma ordenada |
-| **Bandeja de salida** | Outbox | Eventos generados por el WMS que se envían a sistemas externos |
-| **Idempotencia** | Idempotency | Garantía de que procesar el mismo mensaje dos veces no genera efecto duplicado |
-| **ID de correlación** | Correlation ID | Identificador único que permite rastrear un flujo completo a través de múltiples sistemas |
-| **Reintento** | Retry | Lógica de reintento automático para mensajes que fallan |
-| **Cola de error** | DLQ (Dead Letter Queue) | Cola donde se envían mensajes que no pudieron procesarse tras N reintentos |
-| **Versión de esquema** | Schema Version | Versionamiento de los contratos para permitir evolución sin romper clientes |
+| **Bandeja de salida** | Outbox (`wms.outbox`) | Persistencia transaccional de eventos generados por el WMS como **base para entrega at-least-once** (INV-010A). Domain-neutral, 12 campos funcionales, UUID4 global server-owned, API `_enqueue_messages()`. |
+| **Idempotencia** | Idempotency | Garantía de que procesar el mismo mensaje dos veces no genera efecto duplicado (`message_id` para outbound / `idempotency_key` para comandos inbound) |
+| **ID de correlación** | Correlation ID | Identificador único (`correlation_id`) que permite rastrear un flujo o batch completo a través de múltiples transacciones y sistemas |
+| **Reintento** | Retry | Lógica de reintento automático para mensajes que fallan (diferido al dispatcher asíncrono) |
+| **Cola de error** | DLQ (Dead Letter Queue) | Cola donde se envían mensajes que no pudieron procesarse tras N reintentos (`status='DEAD'`, diferido al dispatcher) |
+| **Versión de esquema** | Schema Version | Versionamiento estricto de los contratos (`schema_version > 0`) para permitir evolución sin romper consumidores |
+
+> [!NOTE]
+> **Frontera de Entrega y ADR-019 (v1.2)**:
+> INV-010A provee el núcleo de persistencia transaccional del Outbox. La frontera atómica que une mutación física de stock + `wms.inventory.event` + `wms.outbox` en una sola transacción se implementa en **INV-010B**.
+> La entrega real de mensajes (dispatcher en background, RabbitMQ, políticas de reintento y transiciones a `SENT`/`DEAD`) constituye la capa asíncrona posterior.
+
 
 ---
 
