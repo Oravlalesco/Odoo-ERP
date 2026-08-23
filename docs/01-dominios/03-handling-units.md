@@ -97,7 +97,7 @@ stateDiagram-v2
 | **Crear** | Create | Registrar una HU nueva en el sistema | `stock.package.create()` nativo Odoo |
 | **Empacar** | Pack | Agregar contenido a la HU | `stock.package._wms_pack_physical()` (HU-004A, ADR-019) |
 | **Desempacar** | Unpack | Retirar contenido de la HU | `stock.package.unpack()` nativo / `_wms_unpack_physical()` (HU-004B) |
-| **Dividir** | Split | Dividir una HU en dos o más | ⏸ Diferido |
+| **Dividir** | Split | Dividir una HU transfiriendo stock a otra HU vacía | `stock.package._wms_split_physical()` (HU-004C, ADR-019) |
 | **Consolidar** | Merge | Combinar contenido de dos HU en una | ⏸ Diferido |
 | **Cerrar** | Close | Sellar, pesar, etiquetar | ⏸ Diferido |
 | **Reabrir** | Reopen | Abrir HU sellada para inspección o corrección | ⏸ Diferido |
@@ -123,6 +123,18 @@ Garantías del primitive:
 - **Atomicidad ADR-019**: `stock.move` + `stock.quant` (cleanup) + `wms.inventory.event` (UNPACK) + `wms.outbox` (`inventory.hu.unpacked`, schema v1) persisten de forma atómica en la transacción PostgreSQL del llamador.
 - **PLM de Admisión**: Las políticas de perfiles logísticos PLM (`allowed_hu_type_ids`) son reglas exclusivas de admisión/empaque y no bloquean el desempaque de stock existente.
 - **Frontera de privilegios (Narrow Sudo)**: Los guards operacionales, de compañía y de bloqueo (`wms.inventory.block`) ejecutan en el entorno del operador original. La mutación física de stock y transición de `hu_state` ejecutan bajo narrow sudo, preservando `event.operator_id` con la identidad real del operador.
+
+#### División Física Transaccional (`_wms_split_physical` — HU-004C)
+
+Physical Split transfiere stock de una HU fuente en estado `OPEN` hacia una HU destino distinta, existente y físicamente vacía en estado `EMPTY` o sin inicializar (`False`), manteniendo ambas HUs en estado `OPEN` tras la mutación directa paquete a paquete vía `stock.move`/`stock.move.line` (`package_id=source`, `package_dest_id=destination`, `is_inventory=True`, `inventory_name="WMS Physical Split"`).
+
+Garantías del primitive:
+- **Preservación y Transición de Ciclo de Vida**: La fuente permanece `OPEN` y retiene contenido remanente (prohibido vaciado completo); el destino transiciona a `OPEN`.
+- **Historial Nativo de Paquete**: Odoo genera automáticamente exactamente un registro en `stock.package.history` asociado a la HU destino.
+- **Locking Pesimista Ordenado**: Bloqueo de ambos paquetes con `ORDER BY id FOR UPDATE` para evitar deadlocks ABBA.
+- **Atomicidad ADR-019**: `stock.move` + `stock.quant` + `stock.package.history` (destino) + 2 `wms.inventory.event` (UNPACK/PACK) + 1 `wms.outbox` (`inventory.hu.split`, schema v1 con 10 claves canónicas) persisten de forma atómica.
+- **PLM Destination Admission**: Restricciones de tipo de paquete evaluadas exclusivamente sobre el destino.
+- **Frontera de Privilegios (Narrow Sudo)**: Guards y eventos operan bajo el usuario original (`operator_id` real); mutación de stock y actualización de `hu_state` bajo narrow sudo.
 
 La trazabilidad de movimientos físicos de paquetes ya está cubierta de forma nativa por `stock.package.history` en Odoo 19. Para registrar eventos semánticos WMS adicionales (pack, unpack, split, merge), un futuro modelo `wms.hu.operation` (diferido) podrá capturar:
 

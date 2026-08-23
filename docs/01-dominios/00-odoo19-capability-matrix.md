@@ -11,7 +11,7 @@
 | `upstream_commit` | `95f76213d3f732f1d198c740a908e8037c376114` |
 | `verified_at` | 2026-08-18 |
 | `docker_image` | odoo:19.0 |
-| `docker_digest` | TODO — fijar antes de primer desarrollo |
+| `docker_digest` | `sha256:4a96c54e7ccddc83ab3baba00be8f7cac418cbd5bd0291247ed1bba8bbd5d5e7` |
 | `capability_matrix_version` | 1.2 |
 
 > Cada actualización de upstream commit requiere re-verificación de esta matriz + regression testing.
@@ -148,8 +148,9 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | GS1 Logistic Label ZPL | ⏸ HU-003C2 | Etiqueta logística GS1 en formato ZPL para térmicas (diferido) |
 | Print/Reprint Policy & Audit | ⏸ HU-003C3 | Auditoría y políticas de reimpresión de etiquetas (diferido) |
 | Physical Pack Primitive (`_wms_pack_physical()`) | ✅ HU-004A | Primitive físico transaccional reutilizando direct quant relocation nativo de Odoo 19 con ADR-019 atómico |
-| Physical Unpack Primitive (`_wms_unpack_physical()`) | 🔧 HU-004B | Primitive físico transaccional de desempaque a loose stock con cleanup de quant y ADR-019 atómico |
-| HU lifecycle (`hu_state`) | 🔧 HU-002 | Metadata persistida (`EMPTY..DISPOSED`, nullable); transiciones automáticas `EMPTY -> OPEN`, `OPEN -> OPEN/EMPTY` en comandos físicos (HU-004A/B) |
+| Physical Unpack Primitive (`_wms_unpack_physical()`) | ✅ HU-004B | Primitive físico transaccional de desempaque a loose stock con cleanup de quant y ADR-019 atómico |
+| Physical Split Primitive (`_wms_split_physical()`) | 🔧 HU-004C | Primitive físico transaccional de división paquete a paquete con locks ordenados y ADR-019 atómico |
+| HU lifecycle (`hu_state`) | 🔧 HU-002 | Metadata persistida (`EMPTY..DISPOSED`, nullable); transiciones automáticas en comandos físicos (HU-004A/B/C) |
 | `seal_number` | ⏸ Diferido | Número de sello (diferido) |
 | `hu_class` | 🔧 HU-002 | Clasificación operacional (`PALLET`, `CASE`, `TOTE`, `CONTAINER`, `MIXED`) |
 | Work references | ⏸ Diferido | Enlace a `wms.work` (diferido) |
