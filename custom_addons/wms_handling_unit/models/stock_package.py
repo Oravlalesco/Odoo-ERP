@@ -13,9 +13,14 @@ class StockPackage(models.Model):
     HU-003B: Asignación explícita e idempotente de identificadores GS1 SSCC-18:
         - assign_sscc(sscc_sequence_id): Vincula un SSCC generado por wms.sscc.sequence al campo nativo name.
 
-    HU-004A: Primitive físico transaccional para empaque de inventario (ADR-019):
-        - _wms_pack_physical(quant_id, quantity, correlation_id=None): Ejecuta la mutación física vía stock.move
-          y coordina de forma atómica wms.inventory.event (PACK) + wms.outbox (inventory.hu.packed).
+    HU-004B: Primitive físico transaccional para desempaque de inventario (ADR-019):
+        - _wms_unpack_physical(quant_id, quantity, correlation_id=None): Ejecuta la mutación física vía stock.move
+          y coordina de forma atómica wms.inventory.event (UNPACK) + wms.outbox (inventory.hu.unpacked).
+
+    HU-004C: Primitive físico transaccional para división (split) de inventario entre Handling Units (ADR-019):
+        - _wms_split_physical(quant_id, quantity, destination_package_id, correlation_id=None): Ejecuta la mutación
+          física directa paquete a paquete vía stock.move, transiciona el destino a OPEN, preserva la fuente en OPEN
+          y coordina de forma atómica 2 eventos (UNPACK en fuente, PACK en destino) + 1 outbox (inventory.hu.split).
     """
 
     _inherit = "stock.package"
@@ -588,4 +593,341 @@ class StockPackage(models.Model):
         return {
             "package_id": self.id,
             "correlation_id": events.correlation_id,
+        }
+
+    def _wms_split_physical(self, quant_id, quantity, destination_package_id, correlation_id=None):
+        """Primitive físico transaccional para dividir una Handling Unit transfiriendo parte de su contenido hacia otra Handling Unit vacía (ADR-019).
+
+        Ejecuta la mutación física mediante el mecanismo nativo de relocalización de stock de Odoo 19,
+        transfiriendo una cantidad positiva de un quant perteneciente a la Handling Unit fuente (self) hacia
+        una Handling Unit destino existente, distinta y vacía (destination_package_id), manteniendo ambas
+        Handling Units en estado 'OPEN' y coordinando la persistencia atómica de 2 eventos de inventario
+        (UNPACK en fuente y PACK en destino) y 1 mensaje Outbox (inventory.hu.split) bajo un mismo correlation_id
+        sin apropiarse de la transacción PostgreSQL del llamador.
+
+        :param int quant_id: ID entero positivo del quant empaquetado origen a transferir.
+        :param float quantity: Cantidad positiva en la UoM del producto.
+        :param int destination_package_id: ID entero positivo del stock.package destino vacío.
+        :param str correlation_id: Opcional, identificador de correlación para el journal y outbox.
+        :return dict: {'source_package_id': int, 'destination_package_id': int, 'correlation_id': str}
+        """
+        self.ensure_one()
+
+        # 1. RBAC Guard: el llamador debe pertenecer al grupo WMS Operator (o superior / admin)
+        if not (
+            self.env.user.has_group("wms_core.group_wms_operator")
+            or self.env.user.has_group("base.group_system")
+        ):
+            raise AccessError("No tiene permisos para ejecutar operaciones WMS de división de HU.")
+
+        # 2. Preflight de argumentos
+        if isinstance(quant_id, bool) or not isinstance(quant_id, int) or quant_id <= 0:
+            raise ValidationError("El identificador del quant debe ser un entero positivo.")
+
+        if (
+            isinstance(quantity, bool)
+            or not isinstance(quantity, (int, float))
+            or math.isnan(quantity)
+            or math.isinf(quantity)
+            or quantity <= 0
+        ):
+            raise ValidationError("La cantidad a transferir debe ser un número finito estrictamente positivo.")
+
+        if isinstance(destination_package_id, bool) or not isinstance(destination_package_id, int) or destination_package_id <= 0:
+            raise ValidationError("El identificador del paquete destino debe ser un entero positivo.")
+
+        if self.id == destination_package_id:
+            raise ValidationError("La Handling Unit destino debe ser distinta de la Handling Unit fuente.")
+
+        if correlation_id is not None:
+            if not isinstance(correlation_id, str) or not correlation_id.strip():
+                raise ValidationError("correlation_id debe ser una cadena de texto no vacía.")
+
+        # 3. Row locks en orden ascendente de IDs de paquetes (para evitar ABBA deadlocks)
+        pkg_ids = sorted([self.id, destination_package_id])
+        self.env.cr.execute(
+            "SELECT id FROM stock_package WHERE id IN (%s, %s) ORDER BY id FOR UPDATE",
+            pkg_ids,
+        )
+        locked_pkg_rows = self.env.cr.fetchall()
+        if len(locked_pkg_rows) != 2:
+            raise ValidationError("Una o ambas Handling Units no existen o ya no están disponibles.")
+
+        # Row lock sobre el quant
+        self.env.cr.execute(
+            "SELECT id FROM stock_quant WHERE id = %s FOR UPDATE",
+            [quant_id],
+        )
+        if not self.env.cr.fetchone():
+            raise ValidationError("El quant especificado no existe.")
+
+        # 4. Invalidación de caché tras la adquisición de locks
+        dest_package = self.env["stock.package"].browse(destination_package_id)
+        for pkg in (self, dest_package):
+            pkg.invalidate_recordset([
+                "hu_state",
+                "company_id",
+                "location_id",
+                "quant_ids",
+                "contained_quant_ids",
+                "package_type_id",
+                "parent_package_id",
+                "child_package_ids",
+            ])
+
+        quant = self.env["stock.quant"].browse(quant_id)
+        quant.invalidate_recordset([
+            "quantity",
+            "reserved_quantity",
+            "available_quantity",
+            "package_id",
+            "location_id",
+            "company_id",
+            "product_id",
+            "lot_id",
+            "owner_id",
+        ])
+
+        # 5. Control de acceso post-lock en el entorno del usuario original
+        self.check_access("read")
+        dest_package.check_access("read")
+        quant.check_access("read")
+
+        # 6. Scope guard: rechazar paquetes anidados (HU-004C opera sólo sobre HUs top-level planas)
+        if self.parent_package_id or self.child_package_ids or dest_package.parent_package_id or dest_package.child_package_ids:
+            raise ValidationError("HU-004C opera únicamente sobre Handling Units planas (top-level sin anidamiento).")
+
+        # 7. Lifecycle & Content guards de la HU fuente y destino
+        if self.hu_state != "OPEN":
+            raise ValidationError(
+                f"No se puede dividir una Handling Unit fuente en estado '{self.hu_state or 'SIN ESTADO'}'. Solo se permite en estado 'OPEN'."
+            )
+
+        if not self.contained_quant_ids:
+            raise ValidationError("La Handling Unit fuente no posee contenido para dividir.")
+
+        if dest_package.hu_state not in (False, "EMPTY"):
+            raise ValidationError(
+                f"La Handling Unit destino debe estar vacía o sin inicializar (estado actual: '{dest_package.hu_state}')."
+            )
+
+        if dest_package.contained_quant_ids:
+            raise ValidationError("La Handling Unit destino ya contiene inventario físico.")
+
+        # 8. Guard de pertenencia del quant a la HU fuente
+        if quant.package_id != self:
+            raise ValidationError("El quant especificado no pertenece directamente a esta Handling Unit.")
+
+        product = quant.product_id
+        uom = product.uom_id
+
+        # 9. Algoritmo de retención de la fuente multi-UoM
+        if uom.compare(quantity, quant.quantity) < 0:
+            # La fuente retiene parte del mismo quant
+            pass
+        elif uom.compare(quantity, quant.quantity) == 0:
+            # Se transfiere el quant completo; debe existir al menos otro quant directo positivo
+            other_quants = self.contained_quant_ids.filtered(lambda q: q.id != quant.id)
+            has_other_positive_quant = any(
+                q.product_id.uom_id.compare(q.quantity, 0.0) > 0 for q in other_quants
+            )
+            if not has_other_positive_quant:
+                raise ValidationError("La operación de split no puede vaciar completamente la Handling Unit fuente.")
+        else:
+            raise ValidationError("La cantidad a transferir excede la cantidad total del quant.")
+
+        # 10. Guards de compañía y multi-company
+        if not quant.company_id:
+            raise ValidationError("El quant debe tener una compañía asignada.")
+
+        if quant.company_id not in self.env.user.company_ids:
+            raise AccessError("No tiene acceso a la compañía del inventario origen.")
+
+        if not self.company_id:
+            raise ValidationError("La Handling Unit fuente posee contenido pero su compañía no está resuelta.")
+
+        if self.company_id != quant.company_id:
+            raise ValidationError(
+                f"La compañía de la Handling Unit fuente ({self.company_id.name}) no coincide con la del inventario ({quant.company_id.name})."
+            )
+
+        if self.company_id not in self.env.user.company_ids:
+            raise AccessError("No tiene acceso a la compañía de la Handling Unit fuente.")
+
+        if dest_package.company_id and dest_package.company_id != quant.company_id:
+            raise ValidationError(
+                f"La compañía de la Handling Unit destino ({dest_package.company_id.name}) no coincide con la del inventario ({quant.company_id.name})."
+            )
+
+        if dest_package.company_id and dest_package.company_id not in self.env.user.company_ids:
+            raise AccessError("No tiene acceso a la compañía de la Handling Unit destino.")
+
+        # 11. Guards de ubicación
+        location = quant.location_id
+        if not location or location.usage != "internal":
+            raise ValidationError("La ubicación física del inventario debe ser de tipo 'Interna' (usage='internal').")
+
+        if location.company_id and location.company_id != quant.company_id:
+            raise ValidationError(
+                f"La compañía de la ubicación ({location.company_id.name}) no coincide con la del inventario ({quant.company_id.name})."
+            )
+
+        # 12. Guards operacionales de cantidad, reservas y trazabilidad
+        if uom.compare(quantity, 0.0) <= 0:
+            raise ValidationError("La cantidad a transferir debe ser estrictamente positiva según la precisión de la UoM.")
+
+        if not uom.is_zero(quant.reserved_quantity):
+            raise ValidationError("El quant posee reservas activas. No se puede transferir inventario reservado.")
+
+        if uom.compare(quantity, quant.available_quantity) > 0:
+            raise ValidationError("La cantidad a transferir excede la cantidad disponible del quant.")
+
+        if product.tracking in ("lot", "serial") and not quant.lot_id:
+            raise ValidationError(f"El producto '{product.name}' requiere número de lote/serie pero el quant no tiene lote asignado.")
+
+        if product.tracking == "serial" and uom.compare(quantity, 1.0) != 0:
+            raise ValidationError(f"Los productos trazados por serie ('{product.name}') solo pueden transferirse de a 1 unidad.")
+
+        # 13. Guards de bloqueos de inventario (wms.inventory.block)
+        block_model = self.env["wms.inventory.block"]
+        common_block_scope = {
+            "company_id": quant.company_id,
+            "product_id": product,
+            "location_id": location,
+            "lot_id": quant.lot_id or False,
+            "owner_id": quant.owner_id or False,
+        }
+
+        if block_model.is_blocked(**common_block_scope, package_id=self):
+            raise ValidationError("La operación está bloqueada por una regla activa de bloqueo de inventario en el origen.")
+
+        if block_model.is_blocked(**common_block_scope, package_id=dest_package):
+            raise ValidationError("La operación está bloqueada por una regla activa de bloqueo de inventario en el destino.")
+
+        # 14. Guards de tipo de paquete y PLM (wms.product.logistics) sobre el destino
+        if dest_package.package_type_id:
+            self.env.cr.execute(
+                "SELECT company_id FROM stock_package_type WHERE id = %s",
+                [dest_package.package_type_id.id],
+            )
+            type_row = self.env.cr.fetchone()
+            if type_row and type_row[0] and type_row[0] != quant.company_id.id:
+                raise ValidationError("La compañía del tipo de paquete destino no coincide con la del inventario.")
+
+        logistics = self.env["wms.product.logistics"].search([
+            ("product_tmpl_id", "=", product.product_tmpl_id.id),
+            "|",
+            ("company_id", "=", quant.company_id.id),
+            ("company_id", "=", False),
+        ], limit=1)
+        if logistics:
+            self.env.cr.execute(
+                "SELECT stock_package_type_id FROM stock_package_type_wms_product_logistics_rel WHERE wms_product_logistics_id = %s",
+                [logistics.id],
+            )
+            allowed_type_ids = [row[0] for row in self.env.cr.fetchall()]
+            if allowed_type_ids:
+                dest_type_id = dest_package.package_type_id.id
+                if not dest_type_id:
+                    raise ValidationError(
+                        f"El producto '{product.display_name}' exige un tipo de HU permitido, pero el paquete destino no tiene tipo asignado."
+                    )
+                if dest_type_id not in allowed_type_ids:
+                    raise ValidationError(
+                        f"El tipo de paquete asignado a la HU destino no está permitido para el producto '{product.display_name}'."
+                    )
+
+        # 15. Captura inmutable de metadatos antes de la mutación física
+        source_pkg_id = self.id
+        source_pkg_ref = self.name
+        dest_pkg_id = dest_package.id
+        dest_pkg_ref = dest_package.name
+        product_id = product.id
+        lot_id = quant.lot_id.id if quant.lot_id else False
+        owner_id = quant.owner_id.id if quant.owner_id else False
+        location_id = location.id
+        company_id = quant.company_id.id
+        uom_id = uom.id
+        warehouse_id = location.warehouse_id.id if hasattr(location, "warehouse_id") and location.warehouse_id else False
+
+        # 16. Mutación física vía narrow sudo sobre stock.move
+        quant_sudo = quant.sudo()
+        source_sudo = self.sudo()
+        destination_sudo = dest_package.sudo()
+
+        move_vals = quant_sudo.with_context(
+            inventory_name="WMS Physical Split"
+        )._get_inventory_move_values(
+            quantity,
+            location,
+            location,
+            package_id=source_sudo,
+            package_dest_id=destination_sudo,
+        )
+
+        move = self.env["stock.move"].sudo().create(move_vals)
+        move._action_done()
+
+        destination_sudo.hu_state = "OPEN"
+
+        # 17. Persistencia atómica de 2 Eventos + 1 Outbox en el entorno del usuario original
+        event_vals_list = [
+            {
+                "company_id": company_id,
+                "event_type": "UNPACK",
+                "product_id": product_id,
+                "lot_id": lot_id,
+                "package_id": source_pkg_id,
+                "owner_id": owner_id,
+                "source_location_id": location_id,
+                "dest_location_id": location_id,
+                "quantity": quantity,
+                "warehouse_id": warehouse_id,
+            },
+            {
+                "company_id": company_id,
+                "event_type": "PACK",
+                "product_id": product_id,
+                "lot_id": lot_id,
+                "package_id": dest_pkg_id,
+                "owner_id": owner_id,
+                "source_location_id": location_id,
+                "dest_location_id": location_id,
+                "quantity": quantity,
+                "warehouse_id": warehouse_id,
+            },
+        ]
+
+        outbox_payload = {
+            "source_package_id": source_pkg_id,
+            "source_package_ref": source_pkg_ref,
+            "destination_package_id": dest_pkg_id,
+            "destination_package_ref": dest_pkg_ref,
+            "product_id": product_id,
+            "lot_id": lot_id,
+            "owner_id": owner_id,
+            "location_id": location_id,
+            "quantity": quantity,
+            "uom_id": uom_id,
+        }
+
+        outbox_vals_list = [
+            {
+                "company_id": company_id,
+                "event_name": "inventory.hu.split",
+                "schema_version": 1,
+                "payload": outbox_payload,
+            }
+        ]
+
+        events, outbox = self.env["wms.inventory.event"]._append_events_with_outbox(
+            event_vals_list=event_vals_list,
+            messages=outbox_vals_list,
+            correlation_id=correlation_id.strip() if correlation_id else None,
+        )
+
+        return {
+            "source_package_id": source_pkg_id,
+            "destination_package_id": dest_pkg_id,
+            "correlation_id": events[:1].correlation_id,
         }

@@ -82,7 +82,7 @@ Módulo del dominio de inventario para el Warehouse Management System (WMS).
 - **Garantías Transaccionales y Límites de ADR-019**:
   - Cero administración interna de transacciones: prohíbe `commit()`, `rollback()`, `savepoint()`, creación de cursores o `sudo()`.
   - La transacción PostgreSQL pertenece al command handler que ejecuta la mutación física de stock. Si Outbox falla, Event y la mutación de stock se revierten conjuntamente por ACID.
-  - **Frontera de Cumplimiento**: INV-010B completa el primitive de infraestructura para registro atómico. La demostración de cumplimiento end-to-end de ADR-019 (CORE-003 + CORE-004) se materializa en cada comando físico de dominio: HU-004A Physical Pack (`_wms_pack_physical`) y HU-004B Physical Unpack (`_wms_unpack_physical`).
+  - **Frontera de Cumplimiento**: INV-010B completa el primitive de infraestructura para registro atómico. La demostración de cumplimiento end-to-end de ADR-019 (CORE-003 + CORE-004) se materializa en cada comando físico de dominio: HU-004A Physical Pack (`_wms_pack_physical`), HU-004B Physical Unpack (`_wms_unpack_physical`) y HU-004C Physical Split (`_wms_split_physical`).
 
 ---
 

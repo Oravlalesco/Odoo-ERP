@@ -706,7 +706,12 @@ class TestPhysicalUnpack(TransactionCase):
                 "name": "Product Concurrency Unpack",
                 "is_storable": True,
             })
-            loc = env_setup.ref("stock.stock_location_stock")
+            loc_parent = env_setup.ref("stock.stock_location_stock").location_id
+            loc = env_setup["stock.location"].create({
+                "name": "LOC-CONC-UNPACK",
+                "usage": "internal",
+                "location_id": loc_parent.id if loc_parent else False,
+            })
             pkg = env_setup["stock.package"].create({
                 "name": "PKG-HU-054-CONC",
                 "hu_state": "OPEN",
@@ -841,4 +846,5 @@ class TestPhysicalUnpack(TransactionCase):
                 cr_clean.execute("DELETE FROM stock_package WHERE id = %s", [pkg_id])
                 cr_clean.execute("DELETE FROM product_product WHERE id = %s", [prod_id])
                 cr_clean.execute("DELETE FROM product_template WHERE id = %s", [tmpl_id])
+                cr_clean.execute("DELETE FROM stock_location WHERE id = %s", [loc_id])
                 cr_clean.commit()
