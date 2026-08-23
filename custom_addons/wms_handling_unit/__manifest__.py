@@ -9,7 +9,7 @@ Módulo del dominio de Unidades de Manipulación (Handling Units) y GS1 para WMS
 Industrializa y extiende el modelo nativo stock.package de Odoo 19 como fundamento físico
 de las Handling Units (ADR-013), prohibiendo la creación de modelos paralelos tipo wms.handling.unit.
 Provee generadores/secuencias SSCC-18, reporte PDF de etiqueta logística GS1 y primitivas
-transaccionales de empaque físico (HU-004A) con coordinación atómica de eventos y outbox (ADR-019).
+transaccionales de empaque y desempaque físico (HU-004A, HU-004B) con coordinación atómica de eventos y outbox (ADR-019).
     """,
     "version": "19.0.1.0.0",
     "category": "Warehouse/WMS",
