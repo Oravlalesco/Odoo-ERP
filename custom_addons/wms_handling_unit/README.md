@@ -89,10 +89,21 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
   - Persistencia atómica de eventos: Registra 2 eventos `wms.inventory.event` (`UNPACK` en fuente y `PACK` en destino) y 1 mensaje `wms.outbox` (`inventory.hu.split`, schema v1 con payload canónico de 10 claves) bajo el mismo `correlation_id` mediante `_append_events_with_outbox()`.
   - Frontera de privilegios (Narrow Sudo): Guards y registro de eventos operan en el entorno del operador original (`operator_id` no superuser); la mutación física de stock y transición de `hu_state` ejecutan bajo narrow sudo.
 
-### 10. Extensiones WMS Deliberadamente Diferidas (HU-004D+ / HU-005+)
+### 10. Consolidación Física Transaccional (`stock.package._wms_merge_physical` — HU-004D)
+- **Primitive Físico Privado `_wms_merge_physical(destination_package_id, correlation_id=None)`**:
+  - Cuarto consumidor end-to-end de ADR-019 (mutación física paquete a paquete multi-quant en batch + 2N eventos + 1 outbox en una sola transacción PostgreSQL del llamador).
+  - Mutación física en batch: Reutiliza el mecanismo nativo `move_quants(package_dest_id=destination)` sobre el recordset de quants positivos de la fuente, generando exactamente un nuevo registro de `stock.package.history` para la HU destino y purgando residuos cero mediante `_quant_tasks()`.
+  - Transiciones de ciclo de vida: La HU fuente transiciona de `OPEN -> EMPTY` tras el vaciado completo de quants; la HU destino permanece en `OPEN` acumulando el contenido previo y el consolidado.
+  - Locking pesimista ordenado: `SELECT id FROM stock_package WHERE id IN (...) ORDER BY id FOR UPDATE` y locks sobre quants directos previenen deadlocks ABBA en operaciones concurrentes directas y cruzadas recíprocas (A -> B frente a B -> A).
+  - Guards estrictos: Ambas HUs en `OPEN`, ambas con contenido físico previo no vacío, rechazo de quants negativos, ubicación única común interna, misma compañía resuelta, cero reservas activas, trazabilidad lote/serie y evaluación individual de los 5 scopes de `wms.inventory.block` sobre cada quant entrante en ambas HUs.
+  - PLM de Admisión en Destino: Las restricciones PLM (`wms.product.logistics.allowed_hu_type_ids`) aplican exclusivamente a los productos entrantes contra el `package_type_id` de la HU destino; el tipo de la fuente no se reevalúa.
+  - Persistencia atómica de eventos: Registra `2N` eventos `wms.inventory.event` (`UNPACK` en fuente y `PACK` en destino por cada quant transferido) y 1 mensaje `wms.outbox` (`inventory.hu.merged`, schema v1 con 7 claves raíz y 5 claves por línea) bajo el mismo `correlation_id` mediante `_append_events_with_outbox()`.
+  - Frontera de privilegios (Narrow Sudo): Guards y registro de eventos operan en el entorno del operador original (`operator_id` no superuser); la mutación física de stock y transición de `hu_state` ejecutan bajo narrow sudo.
+
+### 11. Extensiones WMS Deliberadamente Diferidas (HU-004E+ / HU-005+)
 - Etiqueta logística GS1 en formato ZPL para impresoras térmicas directas (HU-003C2).
 - Políticas de impresión/reimpresión y auditoría de eventos de impresión (HU-003C3).
-- Operaciones de consolidación (`merge`), cierre y despacho (`close`, `reopen`, `dispatch`).
+- Operaciones de cierre, reapertura y despacho (`close`, `reopen`, `dispatch`).
 - Integración con Work y tareas dirigidas (`current_work_id`, `last_work_id`).
 - Validaciones de jerarquía multi-nivel y anidamiento dinámico (HU-005+).
 
@@ -112,8 +123,9 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
 | **HU-003C3** | Print/Reprint Policy & Audit | ⏸ Diferido |
 | **HU-004A** | Physical Pack Core (`_wms_pack_physical()`, ADR-019) | ✅ Merged |
 | **HU-004B** | Physical Unpack Core (`_wms_unpack_physical()`, ADR-019) | ✅ Merged |
-| **HU-004C** | Physical Split Core (`_wms_split_physical()`, ADR-019) | 🔧 Current |
-| **HU-004D+** | HU Operation Engine (`merge`, `close`, `reopen`) | ⏸ Diferido |
+| **HU-004C** | Physical Split Core (`_wms_split_physical()`, ADR-019) | ✅ Merged |
+| **HU-004D** | Physical Merge Core (`_wms_merge_physical()`, ADR-019) | 🔧 Current |
+| **HU-004E+** | HU Operation Engine (`close`, `reopen`, `dispatch`) | ⏸ Diferido |
 | **HU-005+** | Multi-level Hierarchy & Nesting Validations | ⏸ Diferido |
 
 ---

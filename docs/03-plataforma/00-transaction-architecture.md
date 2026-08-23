@@ -77,13 +77,14 @@ Condiciones que el WMS prohíbe en operaciones normales pero que Odoo puede perm
 | **Physical Pack** | 1 transacción atómica | `stock_quant`, `stock_move`, `stock_move_line`, `stock_package`, `stock_package_history`, `wms_inventory_event`, `wms_outbox` | < 200ms p99 |
 | **Physical Unpack** | 1 transacción atómica | `stock_quant`, `stock_move`, `stock_move_line`, `stock_package`, `wms_inventory_event`, `wms_outbox` | < 200ms p99 |
 | **Physical Split** | 1 transacción atómica | `stock_quant`, `stock_move`, `stock_move_line`, `stock_package`, `stock_package_history`, `wms_inventory_event`, `wms_outbox` | < 200ms p99 |
+| **Physical Merge** | 1 transacción atómica | `stock_quant`, `stock_move`, `stock_move_line`, `stock_package`, `stock_package_history`, `wms_inventory_event`, `wms_outbox` | < 200ms p99 |
 | **Confirm Pick** | 1 transacción atómica | `stock_quant`, `stock_move_line`, `wms_work_line`, `wms_inventory_event`, `wms_outbox` | < 200ms p99 |
 | **Confirm Put** | 1 transacción atómica | `stock_quant`, `stock_move_line`, `wms_work_line`, `wms_inventory_event`, `wms_outbox` | < 200ms p99 |
 | **Heartbeat** | 1 transacción atómica | `wms_work` (solo `last_heartbeat_at`, `lease_expires_at`) | < 20ms p99 |
 | **Scan Location** | Sin transacción (lectura) | — | < 50ms p99 |
 | **Scan Product** | Sin transacción (lectura) | — | < 50ms p99 |
 
-> ℹ️ **Nota sobre Physical Pack (HU-004A), Physical Unpack (HU-004B) y Physical Split (HU-004C)**: Implementan primitives transaccionales internos (`_wms_pack_physical`, `_wms_unpack_physical`, `_wms_split_physical`); su exposición como comandos RF/API públicos está diferida a la incorporación del wrapper de idempotencia con `command_id`.
+> ℹ️ **Nota sobre Physical Pack (HU-004A), Physical Unpack (HU-004B), Physical Split (HU-004C) y Physical Merge (HU-004D)**: Implementan primitives transaccionales internos (`_wms_pack_physical`, `_wms_unpack_physical`, `_wms_split_physical`, `_wms_merge_physical`); su exposición como comandos RF/API públicos está diferida a la incorporación del wrapper de idempotencia con `command_id`.
 
 ### Operaciones de Planificación (segundos)
 

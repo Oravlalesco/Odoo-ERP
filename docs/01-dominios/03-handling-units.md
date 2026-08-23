@@ -98,7 +98,7 @@ stateDiagram-v2
 | **Empacar** | Pack | Agregar contenido a la HU | `stock.package._wms_pack_physical()` (HU-004A, ADR-019) |
 | **Desempacar** | Unpack | Retirar contenido de la HU | `stock.package.unpack()` nativo / `_wms_unpack_physical()` (HU-004B) |
 | **Dividir** | Split | Dividir una HU transfiriendo stock a otra HU vacía | `stock.package._wms_split_physical()` (HU-004C, ADR-019) |
-| **Consolidar** | Merge | Combinar contenido de dos HU en una | ⏸ Diferido |
+| **Consolidar** | Merge | Combinar contenido de dos HU en una | `stock.package._wms_merge_physical()` (HU-004D, ADR-019) |
 | **Cerrar** | Close | Sellar, pesar, etiquetar | ⏸ Diferido |
 | **Reabrir** | Reopen | Abrir HU sellada para inspección o corrección | ⏸ Diferido |
 | **Mover** | Move | Mover la HU completa a otra ubicación | `stock.quant.move_quants()` nativo Odoo |
@@ -135,6 +135,18 @@ Garantías del primitive:
 - **Atomicidad ADR-019**: `stock.move` + `stock.quant` + `stock.package.history` (destino) + 2 `wms.inventory.event` (UNPACK/PACK) + 1 `wms.outbox` (`inventory.hu.split`, schema v1 con 10 claves canónicas) persisten de forma atómica.
 - **PLM Destination Admission**: Restricciones de tipo de paquete evaluadas exclusivamente sobre el destino.
 - **Frontera de Privilegios (Narrow Sudo)**: Guards y eventos operan bajo el usuario original (`operator_id` real); mutación de stock y actualización de `hu_state` bajo narrow sudo.
+
+#### Consolidación Física Transaccional (`_wms_merge_physical` — HU-004D)
+
+Physical Merge consolida la totalidad del contenido multi-quant de una HU fuente en estado `OPEN` hacia una HU destino existente también en estado `OPEN` con contenido físico previo no vacío, ejecutando la mutación en batch mediante `move_quants(package_dest_id=destination)` y purgando residuos cero con `_quant_tasks()`.
+
+Garantías del primitive:
+- **Transición de Ciclo de Vida**: La HU fuente transiciona de `OPEN -> EMPTY` tras el vaciado completo; la HU destino permanece en `OPEN`.
+- **Historial Nativo de Paquete**: Odoo genera exactamente un nuevo registro en `stock.package.history` asociado a la HU destino para todo el batch de quants consolidados.
+- **Locking Pesimista Ordenado**: Bloqueo ordenado por IDs ascendentes de ambos paquetes (`ORDER BY id FOR UPDATE`) y de todos los quants directos, garantizando serialización determinista y previniendo deadlocks ABBA en operaciones concurrentes y recíprocas (A -> B frente a B -> A).
+- **Atomicidad ADR-019**: N `stock.move` + N `stock.move.line` + 1 `stock.package.history` + 2N `wms.inventory.event` (UNPACK/PACK por cada quant) + 1 `wms.outbox` (`inventory.hu.merged`, schema v1 con 7 claves raíz y 5 claves por línea) persisten de forma atómica.
+- **PLM Destination Admission**: Restricciones de tipo de paquete (`allowed_hu_type_ids`) evaluadas exclusivamente para los productos entrantes sobre la HU destino.
+- **Frontera de Privilegios (Narrow Sudo)**: Guards, validaciones de bloqueos (`wms.inventory.block`) y eventos operan bajo el usuario original (`operator_id` real); mutación física de stock y actualización de `hu_state` bajo narrow sudo.
 
 La trazabilidad de movimientos físicos de paquetes ya está cubierta de forma nativa por `stock.package.history` en Odoo 19. Para registrar eventos semánticos WMS adicionales (pack, unpack, split, merge), un futuro modelo `wms.hu.operation` (diferido) podrá capturar:
 
