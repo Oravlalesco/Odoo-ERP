@@ -56,7 +56,8 @@ No permitiremos que otros sistemas accedan directamente al ORM de Odoo. Las razo
 > **Frontera de Entrega y ADR-019 (v1.2)**:
 > INV-010A proveyó el núcleo de persistencia transaccional del Outbox (`_enqueue_messages`).
 > **INV-010B** introdujo la API de coordinación atómica `_append_events_with_outbox()`.
-> **HU-004A** materializa la primera demostración física end-to-end de ADR-019 con el evento outbox `inventory.hu.packed` (`schema_version=1`, payload con `package_id`, `package_ref`, `product_id`, `lot_id`, `owner_id`, `location_id`, `quantity`, `uom_id`).
+> **HU-004A** materializa la primera demostración física end-to-end de ADR-019 con el evento outbox `inventory.hu.packed` (`schema_version=1`, payload canónico de 8 claves: `package_id`, `package_ref`, `product_id`, `lot_id`, `owner_id`, `location_id`, `quantity`, `uom_id`).
+> **HU-004B** materializa el evento outbox `inventory.hu.unpacked` (`schema_version=1`, payload canónico idéntico de 8 claves: `package_id`, `package_ref`, `product_id`, `lot_id`, `owner_id`, `location_id`, `quantity`, `uom_id`) para desempaque físico atómico.
 > La entrega real de mensajes (dispatcher en background, RabbitMQ, políticas de reintento y transiciones a `SENT`/`DEAD`) constituye la capa asíncrona posterior.
 
 

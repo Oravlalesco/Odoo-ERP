@@ -4,3 +4,4 @@ from . import test_sscc_sequence
 from . import test_stock_package_sscc_assignment
 from . import test_gs1_logistic_label
 from . import test_physical_pack
+from . import test_physical_unpack

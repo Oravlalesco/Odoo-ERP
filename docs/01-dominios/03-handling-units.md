@@ -113,6 +113,17 @@ Garantías del primitive:
 - **Atomicidad ADR-019**: `stock.move` + `stock.quant` + `stock.package.history` + `wms.inventory.event` (PACK) + `wms.outbox` (`inventory.hu.packed`, schema v1) persisten de forma atómica en una única transacción PostgreSQL.
 - **Frontera de privilegios (Narrow Sudo)**: Los guards operacionales, de compañía, de bloqueo (`wms.inventory.block`) y PLM (`wms.product.logistics`) ejecutan en el entorno del operador original. La mutación física y actualización de `hu_state` ejecutan bajo narrow sudo, preservando `event.operator_id` con la identidad real del operador.
 
+#### Desempaque Físico Transaccional (`_wms_unpack_physical` — HU-004B)
+
+Physical Unpack traslada contenido de la HU a inventario suelto (*loose stock*) en la misma ubicación física mediante `stock.move`/`stock.move.line` (`package_id=self`, `package_dest_id=False`, `is_inventory=True`, `inventory_name="WMS Physical Unpack"`) y `_action_done()`, seguido de `quant._quant_tasks()`.
+
+Garantías del primitive:
+- **Transición de ciclo de vida**: `OPEN -> OPEN` mientras la HU conserve quants (`contained_quant_ids`), y `OPEN -> EMPTY` cuando queda totalmente vacía.
+- **Cero Historial de Paquete**: Al extraer a stock suelto (`result_package_id=False`), Odoo nativo no genera registros en `stock.package.history`.
+- **Atomicidad ADR-019**: `stock.move` + `stock.quant` (cleanup) + `wms.inventory.event` (UNPACK) + `wms.outbox` (`inventory.hu.unpacked`, schema v1) persisten de forma atómica en la transacción PostgreSQL del llamador.
+- **PLM de Admisión**: Las políticas de perfiles logísticos PLM (`allowed_hu_type_ids`) son reglas exclusivas de admisión/empaque y no bloquean el desempaque de stock existente.
+- **Frontera de privilegios (Narrow Sudo)**: Los guards operacionales, de compañía y de bloqueo (`wms.inventory.block`) ejecutan en el entorno del operador original. La mutación física de stock y transición de `hu_state` ejecutan bajo narrow sudo, preservando `event.operator_id` con la identidad real del operador.
+
 La trazabilidad de movimientos físicos de paquetes ya está cubierta de forma nativa por `stock.package.history` en Odoo 19. Para registrar eventos semánticos WMS adicionales (pack, unpack, split, merge), un futuro modelo `wms.hu.operation` (diferido) podrá capturar:
 
 ### HU Operation History (`wms.hu.operation` — ⏸ Diferido)

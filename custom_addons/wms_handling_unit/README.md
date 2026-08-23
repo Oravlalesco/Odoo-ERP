@@ -65,8 +65,19 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
   - Persistencia atómica de eventos: Registra `wms.inventory.event` (`PACK`) y `wms.outbox` (`inventory.hu.packed`, schema v1) compartiendo el mismo `correlation_id` mediante `_append_events_with_outbox()`.
   - Frontera de privilegios (Narrow Sudo): Guards y registro de eventos operan en el entorno del operador original (`operator_id` no superuser); la mutación física de stock y transición de `hu_state` ejecutan bajo narrow sudo.
 
-### 8. Extensiones WMS Deliberadamente Diferidas (HU-004B+)
-- Operación de desempaque físico (`unpack` — HU-004B).
+### 8. Desempaque Físico Transaccional (`stock.package._wms_unpack_physical` — HU-004B)
+- **Primitive Físico Privado `_wms_unpack_physical(quant_id, quantity, correlation_id=None)`**:
+  - Segundo consumidor end-to-end de ADR-019 (mutación física + journal + outbox en una sola transacción PostgreSQL del llamador).
+  - Mutación física: Reutiliza el mecanismo nativo de relocalización directa de quants de Odoo 19 (`_get_inventory_move_values` con `package_id=self` y `package_dest_id=False` + `_action_done()`), moviendo el stock de la HU a inventario suelto (*loose*) en la misma ubicación física.
+  - Cero registros `stock.package.history`: Al extraer stock a loose (`result_package_id=False`), Odoo nativo no genera entradas de historial de paquete.
+  - Cleanup nativo de quant: Ejecuta `quant._quant_tasks()` y nunca vuelve a leer el quant tras la limpieza (para evitar errores por fusión o eliminación de fila).
+  - Transición de ciclo de vida: `OPEN -> OPEN` mientras la HU conserve quants (`contained_quant_ids`), y `OPEN -> EMPTY` cuando queda vacía.
+  - Guards estrictos: Package hu_state `OPEN`, quant perteneciente a la HU (`quant.package_id == self`), ubicación interna, cero reservas, validaciones UoM, quants con tracking/serial=1.0, y bloqueos de inventario (`wms.inventory.block`).
+  - PLM de Admisión: Las reglas PLM (`wms.product.logistics.allowed_hu_type_ids`) son exclusivas de admisión/empaque y no bloquean el desempaque de stock existente.
+  - Persistencia atómica de eventos: Registra `wms.inventory.event` (`UNPACK`) y `wms.outbox` (`inventory.hu.unpacked`, schema v1 con payload canónico de 8 claves) compartiendo el mismo `correlation_id` mediante `_append_events_with_outbox()`.
+  - Frontera de privilegios (Narrow Sudo): Guards y registro de eventos operan en el entorno del operador original (`operator_id` no superuser); la mutación física de stock y transición de `hu_state` ejecutan bajo narrow sudo.
+
+### 9. Extensiones WMS Deliberadamente Diferidas (HU-004C+ / HU-005+)
 - Etiqueta logística GS1 en formato ZPL para impresoras térmicas directas (HU-003C2).
 - Políticas de impresión/reimpresión y auditoría de eventos de impresión (HU-003C3).
 - Operaciones de división y consolidación (`split`, `merge`).
@@ -88,8 +99,8 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
 | **HU-003C1** | GS1 Logistic Label PDF — SSCC-only GS1-128 (`qweb-pdf`, A6) | ✅ Merged |
 | **HU-003C2** | GS1 Logistic Label ZPL — SSCC-only | ⏸ Diferido |
 | **HU-003C3** | Print/Reprint Policy & Audit | ⏸ Diferido |
-| **HU-004A** | Physical Pack Core (`_wms_pack_physical()`, ADR-019) | 🔧 Current |
-| **HU-004B** | Physical Unpack Core (`_wms_unpack_physical()`) | ⏭ Next |
+| **HU-004A** | Physical Pack Core (`_wms_pack_physical()`, ADR-019) | ✅ Merged |
+| **HU-004B** | Physical Unpack Core (`_wms_unpack_physical()`, ADR-019) | 🔧 Current |
 | **HU-004C+** | HU Operation Engine (`split`, `merge`, `close`, `reopen`) | ⏸ Diferido |
 | **HU-005+** | Multi-level Hierarchy & Nesting Validations | ⏸ Diferido |
 

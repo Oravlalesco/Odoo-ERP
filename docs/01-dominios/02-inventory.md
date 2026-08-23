@@ -310,7 +310,9 @@ Physical WMS Command (Caller)
 - **Correlación Única**: Genera un único UUID4 compartido para ambos modelos si `correlation_id=None`, o valida y normaliza el `correlation_id` explícito no vacío.
 - **Caller Ownership de Transacción**: El helper **no administra** transacciones (`commit`, `rollback`, `savepoint` o cursores independientes estrictamente prohibidos). Si la inserción en el Outbox falla, toda la transacción (incluyendo la mutación de inventario y los eventos del journal) se revierte por ACID.
 - **Sin elevación de privilegios**: Prohibido el uso de `sudo()`; preserva íntegramente las ACLs y record rules de seguridad RBAC y multi-compañía.
-- **Primer Consumidor Concreto (HU-004A)**: `stock.package._wms_pack_physical()` utiliza `_append_events_with_outbox()` para persistir el evento `PACK` y el outbox `inventory.hu.packed` (v1) de forma atómica junto a la mutación de `stock.move` y `stock.quant`.
+- **Primeros Consumidores Concretos (HU-004A, HU-004B)**:
+  - `stock.package._wms_pack_physical()`: Persiste el evento `PACK` y el outbox `inventory.hu.packed` (v1) de forma atómica junto a la mutación de `stock.move` y `stock.quant`.
+  - `stock.package._wms_unpack_physical()`: Persiste el evento `UNPACK` y el outbox `inventory.hu.unpacked` (v1) de forma atómica junto a la mutación de `stock.move` y `stock.quant`.
 
 Detalle en [Integración](../03-plataforma/01-integracion.md) y [Transaction Architecture](../03-plataforma/00-transaction-architecture.md).
 

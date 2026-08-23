@@ -356,3 +356,236 @@ class StockPackage(models.Model):
             "package_id": self.id,
             "correlation_id": events.correlation_id,
         }
+
+    def _wms_unpack_physical(self, quant_id, quantity, correlation_id=None):
+        """Primitive físico transaccional para retirar inventario de una Handling Unit (ADR-019).
+
+        Ejecuta la mutación física mediante el mecanismo nativo de relocalización de stock de Odoo 19,
+        retirando una cantidad positiva de un quant perteneciente a la Handling Unit hacia inventario suelto
+        (result_package_id=False) y coordinando la persistencia atómica de wms.inventory.event (UNPACK)
+        y wms.outbox (inventory.hu.unpacked) bajo un mismo correlation_id sin apropiarse de la transacción
+        PostgreSQL del llamador.
+
+        :param int quant_id: ID entero positivo del quant empaquetado a retirar.
+        :param float quantity: Cantidad positiva en la UoM del producto.
+        :param str correlation_id: Opcional, identificador de correlación para el journal y outbox.
+        :return dict: {'package_id': int, 'correlation_id': str}
+        """
+        self.ensure_one()
+
+        # 1. RBAC Guard: el llamador debe pertenecer al grupo WMS Operator (o superior / admin)
+        if not (
+            self.env.user.has_group("wms_core.group_wms_operator")
+            or self.env.user.has_group("base.group_system")
+        ):
+            raise AccessError("No tiene permisos para ejecutar operaciones WMS de desempaque.")
+
+        # 2. Preflight de argumentos
+        if isinstance(quant_id, bool) or not isinstance(quant_id, int) or quant_id <= 0:
+            raise ValidationError("El identificador del quant debe ser un entero positivo.")
+
+        if (
+            isinstance(quantity, bool)
+            or not isinstance(quantity, (int, float))
+            or math.isnan(quantity)
+            or math.isinf(quantity)
+        ):
+            raise ValidationError("La cantidad a desempaquetar debe ser un valor numérico válido.")
+
+        if correlation_id is not None:
+            if not isinstance(correlation_id, str) or not correlation_id.strip():
+                raise ValidationError("correlation_id debe ser una cadena de texto no vacía.")
+
+        # 3. Row locks en orden estricto (package FOR UPDATE -> quant FOR UPDATE)
+        self.env.cr.execute(
+            "SELECT id FROM stock_package WHERE id = %s FOR UPDATE",
+            [self.id],
+        )
+        if not self.env.cr.fetchone():
+            raise ValidationError("La HU ya no existe.")
+
+        self.env.cr.execute(
+            "SELECT id FROM stock_quant WHERE id = %s FOR UPDATE",
+            [quant_id],
+        )
+        if not self.env.cr.fetchone():
+            raise ValidationError("El quant especificado no existe.")
+
+        # 4. Invalidación de caché tras la adquisición de locks
+        self.invalidate_recordset([
+            "hu_state",
+            "company_id",
+            "location_id",
+            "quant_ids",
+            "contained_quant_ids",
+            "package_type_id",
+            "parent_package_id",
+            "child_package_ids",
+        ])
+
+        quant = self.env["stock.quant"].browse(quant_id)
+        quant.invalidate_recordset([
+            "quantity",
+            "reserved_quantity",
+            "available_quantity",
+            "package_id",
+            "location_id",
+            "company_id",
+            "product_id",
+            "lot_id",
+            "owner_id",
+        ])
+
+        # 5. Scope guard post-lock: rechazar paquetes anidados (HU-004B opera sólo sobre HU top-level plana)
+        if self.parent_package_id or self.child_package_ids:
+            raise ValidationError("HU-004B opera únicamente sobre HU plana (top-level sin anidamiento).")
+
+        # 6. Lifecycle guard de la HU origen: sólo una HU en estado OPEN puede desempaquetarse
+        if self.hu_state != "OPEN":
+            raise ValidationError(
+                f"No se puede desempaquetar una Handling Unit en estado '{self.hu_state or 'SIN ESTADO'}'. Solo se permite en estado 'OPEN'."
+            )
+
+        if not self.contained_quant_ids:
+            raise ValidationError(
+                "La Handling Unit no posee contenido físico para desempaquetar."
+            )
+
+        # 7. Guards de pertenencia y compañía del quant y de la HU
+        if quant.package_id != self:
+            raise ValidationError(
+                "El quant especificado no pertenece directamente a esta Handling Unit."
+            )
+
+        if not quant.company_id:
+            raise ValidationError("El quant debe tener una compañía asignada.")
+
+        if quant.company_id not in self.env.user.company_ids:
+            raise AccessError("No tiene acceso a la compañía del inventario origen.")
+
+        if not self.company_id:
+            raise ValidationError("La HU posee contenido pero su compañía no está resuelta.")
+
+        if self.company_id != quant.company_id:
+            raise ValidationError(
+                f"La compañía de la HU ({self.company_id.name}) no coincide con la del inventario ({quant.company_id.name})."
+            )
+
+        if self.company_id not in self.env.user.company_ids:
+            raise AccessError("No tiene acceso a la compañía de la Handling Unit.")
+
+        # 8. Guards de ubicación del quant (internal location, match si paquete está localizado)
+        if quant.location_id.usage != "internal":
+            raise ValidationError("El inventario a desempaquetar debe estar en una ubicación interna.")
+
+        if self.location_id and self.location_id != quant.location_id:
+            raise ValidationError(
+                f"La ubicación de la HU ({self.location_id.display_name}) no coincide con la del quant ({quant.location_id.display_name})."
+            )
+
+        product = quant.product_id
+        uom = product.uom_id
+
+        if uom.compare(quantity, 0.0) <= 0:
+            raise ValidationError("La cantidad a desempaquetar debe ser estrictamente positiva.")
+
+        if not uom.is_zero(quant.reserved_quantity):
+            raise ValidationError("No se puede desempaquetar inventario con reservas activas.")
+
+        if uom.compare(quantity, quant.available_quantity) > 0:
+            raise ValidationError(
+                f"La cantidad solicitada ({quantity}) excede la disponibilidad ({quant.available_quantity})."
+            )
+
+        if product.tracking != "none" and not quant.lot_id:
+            raise ValidationError(f"El producto '{product.display_name}' requiere seguimiento por lote/serie.")
+
+        if product.tracking == "serial" and uom.compare(quantity, 1.0) != 0:
+            raise ValidationError("Los productos con seguimiento por número de serie deben desempaquetarse en cantidad exacta de 1.0.")
+
+        # 9. Operational Inventory Block guard (sin sudo)
+        is_blocked = self.env["wms.inventory.block"].is_blocked(
+            company_id=quant.company_id,
+            product_id=product,
+            location_id=quant.location_id,
+            lot_id=quant.lot_id or False,
+            package_id=self,
+            owner_id=quant.owner_id or False,
+        )
+        if is_blocked:
+            raise ValidationError("El inventario o paquete origen se encuentra bloqueado operacionalmente.")
+
+        # 10. Captura de metadatos de snapshot inmutable antes de la mutación
+        product_id = product.id
+        lot_id = quant.lot_id.id or False
+        owner_id = quant.owner_id.id or False
+        location_id = quant.location_id.id
+        company_id = quant.company_id.id
+        warehouse_id = quant.location_id.warehouse_id.id or False
+        uom_id = uom.id
+        package_ref = self.name
+
+        # 11. Mutación física nativa con narrow sudo (package_id=self -> package_dest_id=False)
+        quant_sudo = quant.sudo()
+        package_sudo = self.sudo()
+
+        move_vals = quant_sudo.with_context(
+            inventory_name="WMS Physical Unpack"
+        )._get_inventory_move_values(
+            quantity,
+            quant.location_id,
+            quant.location_id,
+            package_id=package_sudo,
+            package_dest_id=False,
+        )
+        move = self.env["stock.move"].sudo().create(move_vals)
+        move._action_done()
+        quant_sudo._quant_tasks()
+
+        # 12. Actualización de hu_state según contenido remanente (sin leer quant post-cleanup)
+        package_sudo.invalidate_recordset(["contained_quant_ids", "quant_ids", "location_id", "hu_state"])
+        if not package_sudo.contained_quant_ids:
+            package_sudo.hu_state = "EMPTY"
+        else:
+            package_sudo.hu_state = "OPEN"
+
+        # 13. Persistencia de Event + Outbox en el entorno del usuario original (NO sudo)
+        event_vals = {
+            "company_id": company_id,
+            "event_type": "UNPACK",
+            "product_id": product_id,
+            "lot_id": lot_id,
+            "package_id": self.id,
+            "owner_id": owner_id,
+            "source_location_id": location_id,
+            "dest_location_id": location_id,
+            "quantity": quantity,
+            "warehouse_id": warehouse_id,
+        }
+
+        message_vals = {
+            "company_id": company_id,
+            "event_name": "inventory.hu.unpacked",
+            "schema_version": 1,
+            "payload": {
+                "package_id": self.id,
+                "package_ref": package_ref,
+                "product_id": product_id,
+                "lot_id": lot_id,
+                "owner_id": owner_id,
+                "location_id": location_id,
+                "quantity": quantity,
+                "uom_id": uom_id,
+            },
+        }
+
+        events, outbox = self.env["wms.inventory.event"]._append_events_with_outbox(
+            [event_vals],
+            [message_vals],
+            correlation_id=correlation_id,
+        )
+
+        return {
+            "package_id": self.id,
+            "correlation_id": events.correlation_id,
+        }
