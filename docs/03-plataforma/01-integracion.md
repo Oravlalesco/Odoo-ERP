@@ -59,6 +59,7 @@ No permitiremos que otros sistemas accedan directamente al ORM de Odoo. Las razo
 > **HU-004A** materializa la primera demostración física end-to-end de ADR-019 con el evento outbox `inventory.hu.packed` (`schema_version=1`, payload canónico de 8 claves: `package_id`, `package_ref`, `product_id`, `lot_id`, `owner_id`, `location_id`, `quantity`, `uom_id`).
 > **HU-004B** materializa el evento outbox `inventory.hu.unpacked` (`schema_version=1`, payload canónico de 8 claves: `package_id`, `package_ref`, `product_id`, `lot_id`, `owner_id`, `location_id`, `quantity`, `uom_id`) para desempaque físico atómico.
 > **HU-004C** materializa el evento outbox `inventory.hu.split` (`schema_version=1`, payload canónico de 10 claves: `source_package_id`, `source_package_ref`, `destination_package_id`, `destination_package_ref`, `product_id`, `lot_id`, `owner_id`, `location_id`, `quantity`, `uom_id`) para división física directa paquete a paquete.
+> **HU-004D** materializa el evento outbox `inventory.hu.merged` (`schema_version=1`, payload canónico de 7 claves raíz: `source_package_id`, `source_package_ref`, `destination_package_id`, `destination_package_ref`, `location_id`, `line_count`, `lines`, con 5 claves por línea: `product_id`, `lot_id`, `owner_id`, `quantity`, `uom_id`) para consolidación física multi-quant paquete a paquete en batch.
 > La entrega real de mensajes (dispatcher en background, RabbitMQ, políticas de reintento y transiciones a `SENT`/`DEAD`) constituye la capa asíncrona posterior.
 
 

@@ -6,3 +6,4 @@ from . import test_gs1_logistic_label
 from . import test_physical_pack
 from . import test_physical_unpack
 from . import test_physical_split
+from . import test_physical_merge
