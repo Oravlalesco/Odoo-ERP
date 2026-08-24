@@ -124,7 +124,7 @@ El modelo estándar `stock.package` de Odoo 19 ya provee de forma nativa:
 | **HU-004A** | Physical Pack Core (`_wms_pack_physical()`, ADR-019) | ✅ Merged |
 | **HU-004B** | Physical Unpack Core (`_wms_unpack_physical()`, ADR-019) | ✅ Merged |
 | **HU-004C** | Physical Split Core (`_wms_split_physical()`, ADR-019) | ✅ Merged |
-| **HU-004D** | Physical Merge Core (`_wms_merge_physical()`, ADR-019) | 🔧 Current |
+| **HU-004D** | Physical Merge Core (`_wms_merge_physical()`, ADR-019) | ✅ Merged |
 | **HU-004E+** | HU Operation Engine (`close`, `reopen`, `dispatch`) | ⏸ Diferido |
 | **HU-005+** | Multi-level Hierarchy & Nesting Validations | ⏸ Diferido |
 

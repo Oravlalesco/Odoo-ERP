@@ -8,7 +8,7 @@
 | Product Version | 0.1 (pre-development) |
 | Odoo Baseline | 19.0 @ `95f76213d3f732f1d198c740a908e8037c376114` |
 | Status | ARCHITECTURE BASELINE APPROVED |
-| Implementation | NOT STARTED |
+| Implementation | IN PROGRESS (Kernel: Fase 7 — Work Engine) |
 
 ## Índice
 

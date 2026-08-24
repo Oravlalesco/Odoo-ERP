@@ -150,7 +150,7 @@ Este enfoque **usa la mecánica de Odoo** (mover a ubicaciones especializadas) e
 | Physical Pack Primitive (`_wms_pack_physical()`) | ✅ HU-004A | Primitive físico transaccional reutilizando direct quant relocation nativo de Odoo 19 con ADR-019 atómico |
 | Physical Unpack Primitive (`_wms_unpack_physical()`) | ✅ HU-004B | Primitive físico transaccional de desempaque a loose stock con cleanup de quant y ADR-019 atómico |
 | Physical Split Primitive (`_wms_split_physical()`) | ✅ HU-004C | Primitive físico transaccional de división paquete a paquete con locks ordenados y ADR-019 atómico |
-| Physical Merge Primitive (`_wms_merge_physical()`) | 🔧 HU-004D | Primitive físico transaccional de consolidación multi-quant paquete a paquete con locks ordenados, move_quants en batch y ADR-019 atómico |
+| Physical Merge Primitive (`_wms_merge_physical()`) | ✅ HU-004D | Primitive físico transaccional de consolidación multi-quant paquete a paquete con locks ordenados, move_quants en batch y ADR-019 atómico |
 | HU lifecycle (`hu_state`) | 🔧 HU-002 | Metadata persistida (`EMPTY..DISPOSED`, nullable); transiciones automáticas en comandos físicos (HU-004A/B/C/D) |
 | `seal_number` | ⏸ Diferido | Número de sello (diferido) |
 | `hu_class` | 🔧 HU-002 | Clasificación operacional (`PALLET`, `CASE`, `TOTE`, `CONTAINER`, `MIXED`) |
