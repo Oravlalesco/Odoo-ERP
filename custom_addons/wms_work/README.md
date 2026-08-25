@@ -75,7 +75,7 @@ Conforme al enfoque incremental del proyecto, las siguientes capacidades quedan 
 |---|---|---|
 | **WORK-001** | Work Engine Bootstrap (Scaffold & Dependencies) | ✅ Merged |
 | **WORK-002** | Work Core Data Models (`wms.work`, `wms.work.line`) | ✅ Merged |
-| **WORK-003** | Work Preparation Lifecycle & State Machine | 🔧 Current |
+| **WORK-003** | Work Preparation Lifecycle & State Machine | ✅ Merged |
 | **WORK-004+** | Atomic Claim & Lease Protocol (ADR-015, ADR-016) | ⏸ Diferido |
 | **WORK-005+** | Work Execution Commands & ADR-019 Integration | ⏸ Diferido |
 | **WORK-006+** | Lease Expiration, Reclaim & Reconciliation (ADR-025) | ⏸ Diferido |
