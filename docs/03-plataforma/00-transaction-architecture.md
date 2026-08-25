@@ -14,13 +14,16 @@ Este documento establece contratos transaccionales que **todo el código WMS deb
 
 ## Principio Fundamental
 
-> **Cada operación WMS que modifica estado debe ser una transacción corta, autocontenida e idempotente.**
+> **Toda operación WMS que modifica estado debe ser corta, autocontenida y atómica.**
+>
+> Todo **comando externo** que modifica estado debe además ser idempotente. Una primitive interna no idempotente solo es válida si es privada, no constituye una API/RPC externa y se ejecuta dentro de la transacción de un command handler que posee la protección de replay.
 
 | Característica | Significado |
 |---|---|
 | **Corta** | < 200ms típico, < 500ms máximo |
 | **Autocontenida** | No depende de estado externo ni de transacciones previas no commiteadas |
-| **Idempotente** | Ejecutarla dos veces produce el mismo resultado |
+| **Atómica** | Mutación, journal y outbox se confirman o revierten juntos |
+| **Idempotente** | Requisito adicional para comandos externos; la replay protection pertenece a `command_id`/`idempotency_key` |
 
 ---
 

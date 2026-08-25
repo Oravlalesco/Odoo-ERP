@@ -16,13 +16,19 @@ Contratos transaccionales que **todo el código WMS debe respetar**. Referencia:
 
 ## Principio Fundamental
 
-> **Cada operación WMS que modifica estado debe ser una transacción corta, autocontenida e idempotente.**
+Toda operación WMS que modifica estado debe ser corta, autocontenida y atómica. La idempotencia depende de la frontera de exposición:
+
+- **Primitives físicas internas**: cortas, autocontenidas y atómicas; pueden no ser idempotentes por sí mismas y deben permanecer privadas si no poseen una clave de idempotencia.
+- **Comandos externos** (RF/API/integración): cortos, autocontenidos, atómicos e idempotentes; `command_id` o `idempotency_key` es dueño de la protección contra replay.
+
+Una primitive interna solo puede ejecutarse dentro de una transacción de command handler y nunca debe publicarse como RPC/API sin un wrapper idempotente.
 
 | Característica | Significado |
 |---|---|
 | **Corta** | < 200ms típico, < 500ms máximo |
 | **Autocontenida** | No depende de estado externo ni de transacciones previas no commiteadas |
-| **Idempotente** | Ejecutarla dos veces produce el mismo resultado |
+| **Atómica** | Mutación, journal y outbox se confirman o revierten juntos |
+| **Idempotente** | Requisito para comandos externos; se garantiza con `command_id`/`idempotency_key` |
 
 ---
 
@@ -179,60 +185,45 @@ que el quant haya sido mutado en ese punto. La mutación real del quant ocurre
 dentro de métodos internos de Odoo (`_action_done()`, `_update_available_quantity()`,
 etc.) que tienen su propia lógica de merge, validación y reconciliación.
 
-### Patrón Correcto: Envolver el Mecanismo ORM
+### Boundary Correcto: Envolver el Mecanismo ORM y usar Event + Outbox
 
 ```python
-def _confirm_pick(self, work_line, scanned_qty):
-    """
-    Confirma un pick envolviendo el mecanismo ORM de Odoo.
-
-    ⚠️ Este es un EJEMPLO ESTRUCTURAL. Antes de implementar:
-    1. Inspeccionar stock.move._action_done() en el SHA fijado de Odoo 19
-    2. Verificar qué método muta realmente el quant
-    3. Determinar el punto exacto donde generar event/outbox
-    """
-    # 1. Preparar el move_line (registro de la operación)
-    move_line = work_line.move_line_id
-    move_line.quantity = scanned_qty
-    if work_line.lot_id:
-        move_line.lot_id = work_line.lot_id
-    move_line.picked = True
-
-    # 2. Ejecutar la mutación VÍA EL MECANISMO ORM DE ODOO
-    #    El método _action_done() del stock.move es el que realmente:
-    #    - Muta los quants (origin y destino)
-    #    - Ejecuta _merge_quants()
-    #    - Actualiza reserved_quantity
-    #    - Gestiona paquetes
-    #
-    #    ⚠️ VERIFICAR: inspeccionar _action_done() en el commit fijado
-    #    para confirmar que este es el punto correcto de mutación.
-    move_line.move_id._action_done()
-
-    # 3. SOLO DESPUÉS de que _action_done() completó sin error
-    #    (la mutación del quant es un hecho), generar event y outbox
-    self.env['wms.inventory.event'].create({
-        'event_type': 'PICK',
-        'product_id': work_line.product_id.id,
-        'location_id': work_line.location_id.id,
-        'location_dest_id': work_line.location_dest_id.id,
-        'quantity': scanned_qty,
-        'lot_id': work_line.lot_id.id or False,
-        'package_id': work_line.package_id.id or False,
-        'work_id': work_line.work_id.id,
-        'work_line_id': work_line.id,
-    })
-
-    self.env['wms.outbox'].create({
-        'event_type': 'PICK_CONFIRMED',
-        'payload': {
-            'work_id': work_line.work_id.id,
-            'product_id': work_line.product_id.id,
-            'quantity': scanned_qty,
-        },
-    })
-    # Event + Outbox + Mutación de quant: todo en la misma transacción
+# Este bloque se ejecuta SOLO después de completar sin error la mutación
+# mediante el mecanismo ORM nativo de Odoo verificado para el SHA pinned.
+company_id = work_line.company_id.id
+event_vals_list = [{
+    "company_id": company_id,
+    "event_type": "PICK",
+    "product_id": work_line.product_id.id,
+    "lot_id": work_line.lot_id.id or False,
+    "package_id": work_line.package_id.id or False,
+    "owner_id": work_line.owner_id.id or False,
+    "source_location_id": work_line.source_location_id.id,
+    "dest_location_id": work_line.dest_location_id.id or False,
+    "quantity": scanned_qty,
+    "warehouse_id": work_line.work_id.warehouse_id.id,
+}]
+messages = [{
+    "company_id": company_id,
+    "event_name": "inventory.pick.completed",
+    "schema_version": 1,
+    "payload": {
+        "work_id": work_line.work_id.id,
+        "work_line_id": work_line.id,
+        "product_id": work_line.product_id.id,
+        "quantity": scanned_qty,
+        "uom_id": work_line.product_uom_id.id,
+    },
+}]
+events, outbox = self.env["wms.inventory.event"]._append_events_with_outbox(
+    event_vals_list,
+    messages,
+    correlation_id=correlation_id,
+)
+# El helper no hace commit/rollback/savepoint/sudo: el caller posee la transacción.
 ```
+
+Las claves del ejemplo corresponden al contrato real de `wms.inventory.event` y `wms.outbox`. Ante cualquier cambio de schema, inspeccionar primero `inventory_event.py`, `outbox.py` y sus tests de boundary; no adaptar este ejemplo por memoria.
 
 ### Checklist antes de Implementar Mutación de Inventario
 
@@ -437,4 +428,5 @@ Antes de escribir `cr.execute(UPDATE ...)` sobre una tabla del ORM, responder
 5. ¿No hay anti-patrones prohibidos?
 6. ¿Se respetan los performance budgets?
 7. ¿Todo SQL directo sobre tablas ORM tiene el checklist de consecuencias documentado?
+8. ¿Las primitives internas no idempotentes permanecen privadas y están detrás de un command handler idempotente cuando se exponen externamente?
 
