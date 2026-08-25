@@ -113,7 +113,7 @@ class WmsWork(models.Model):
         return super().create(vals_list)
 
     def write(self, vals):
-        if "state" in vals and not self.env.context.get("_wms_allow_state_transition"):
+        if "state" in vals:
             raise UserError(
                 "No se puede modificar directamente el estado de una tarea de trabajo. Use las acciones de transición."
             )
@@ -204,7 +204,5 @@ class WmsWork(models.Model):
                 f"Transición al estado {target_state} no autorizada en este slice."
             )
 
-        to_transition.with_context(_wms_allow_state_transition=True).write(
-            {"state": target_state}
-        )
+        super(WmsWork, to_transition).write({"state": target_state})
         return True

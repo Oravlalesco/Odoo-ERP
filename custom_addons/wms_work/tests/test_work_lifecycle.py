@@ -1,6 +1,9 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
-from odoo import Command, fields
+import threading
+import time
+
+from odoo import api, Command, fields
 from odoo.exceptions import AccessError, UserError
 from odoo.tests import tagged
 from odoo.addons.wms_work.tests.common import WorkCommon
@@ -87,6 +90,8 @@ class TestWorkLifecycle(WorkCommon):
                 })
 
         # 4. Multi-create atómico: si uno falla, ninguno se crea ni consume secuencia
+        seq = self.env["ir.sequence"].search([("code", "=", "wms.work")], limit=1)
+        seq_num_before = seq.number_next_actual
         count_before = self.env["wms.work"].search_count([])
         with self.assertRaises(UserError):
             self.env["wms.work"].create([
@@ -95,6 +100,12 @@ class TestWorkLifecycle(WorkCommon):
             ])
         count_after = self.env["wms.work"].search_count([])
         self.assertEqual(count_before, count_after)
+        self.assertEqual(seq.number_next_actual, seq_num_before)
+
+        # Comprobar que el siguiente work creado recibe el número secuencial exacto sin saltos
+        work_after = self.env["wms.work"].create({"warehouse_id": self.warehouse_a.id})
+        expected_ref = f"WORK/{seq_num_before:08d}"
+        self.assertEqual(work_after.reference, expected_ref)
 
     def test_work_21_validation_requires_lines_and_idempotency(self):
         """TEST-WORK-021: Validación exige líneas; éxito e idempotencia."""
@@ -158,7 +169,7 @@ class TestWorkLifecycle(WorkCommon):
         self.assertEqual(work.state, "cancelled")
 
     def test_work_23_forbidden_transition_matrix_and_direct_write_rejection(self):
-        """TEST-WORK-023: Matriz de transiciones prohibidas y rechazo de write(state)."""
+        """TEST-WORK-023: Matriz de transiciones prohibidas y rechazo incondicional de write(state)."""
         work = self.env["wms.work"].create({"warehouse_id": self.warehouse_a.id})
         self.env["wms.work.line"].create({
             "work_id": work.id,
@@ -177,7 +188,17 @@ class TestWorkLifecycle(WorkCommon):
         with self.assertRaises(UserError):
             work.with_user(self.user_system).write({"state": "ready"})
 
-        # 2. Primitive interna rechaza transiciones no autorizadas
+        # 2. Intento explícito de saltarse la máquina de estados con flags de contexto
+        with self.assertRaises(UserError):
+            work.with_context(_wms_allow_state_transition=True).write({"state": "assigned"})
+        with self.assertRaises(UserError):
+            work.with_context(_wms_allow_state_transition=True).write({"state": "ready"})
+        with self.assertRaises(UserError):
+            work.with_user(self.user_system).with_context(
+                _wms_allow_state_transition=True
+            ).write({"state": "assigned"})
+
+        # 3. Primitive interna rechaza transiciones no autorizadas
         with self.assertRaises(UserError):
             work._wms_transition_state("in_progress")
         with self.assertRaises(UserError):
@@ -325,29 +346,150 @@ class TestWorkLifecycle(WorkCommon):
             work_b.with_user(user_company_a).action_validate()
 
     def test_work_27_concurrency_locking_and_zero_side_effects(self):
-        """TEST-WORK-027: Carrera concurrente validate/unlink; quant, events, outbox intactos."""
-        # 1. Medición de invariantes de inventario y mensajería
+        """TEST-WORK-027: Carrera concurrente validate/unlink con dos transacciones y verificación de invariantes."""
+        # 1. Medición de invariantes basales antes de la carrera
         quants_before = self.env["stock.quant"].search_count([])
         events_before = self.env["wms.inventory.event"].search_count([])
         outbox_before = self.env["wms.outbox"].search_count([])
 
-        work = self.env["wms.work"].create({"warehouse_id": self.warehouse_a.id})
-        self.env["wms.work.line"].create({
-            "work_id": work.id,
-            "sequence": 10,
-            "action": "pick",
-            "source_location_id": self.loc_source_a.id,
-            "product_id": self.product_a.id,
-            "quantity": 10.0,
-        })
+        # 2. Creación de fixtures en transacción aislada y commit
+        with self.env.registry.cursor() as cr_setup:
+            env_setup = api.Environment(cr_setup, 1, {})
+            wh = env_setup["stock.warehouse"].search([], limit=1)
+            loc = env_setup["stock.location"].search([
+                ("usage", "=", "internal"),
+                ("warehouse_id", "=", wh.id),
+            ], limit=1) or wh.lot_stock_id
+            prod = env_setup["product.product"].search([
+                ("type", "=", "consu"),
+                ("company_id", "in", [False, wh.company_id.id]),
+            ], limit=1)
+            if not prod:
+                uom = env_setup["uom.uom"].search([], limit=1)
+                prod = env_setup["product.product"].create({
+                    "name": "Concurrent Test Product",
+                    "type": "consu",
+                    "is_storable": True,
+                    "uom_id": uom.id,
+                    "company_id": wh.company_id.id,
+                })
+            work_setup = env_setup["wms.work"].create({
+                "warehouse_id": wh.id,
+            })
+            env_setup["wms.work.line"].create({
+                "work_id": work_setup.id,
+                "sequence": 10,
+                "action": "pick",
+                "source_location_id": loc.id,
+                "product_id": prod.id,
+                "quantity": 10.0,
+            })
+            work_id = work_setup.id
+            cr_setup.commit()
 
-        # Transiciones de ciclo de vida
-        work.action_validate()
-        self.assertEqual(work.state, "ready")
-        work.action_cancel()
-        self.assertEqual(work.state, "cancelled")
+        try:
+            # 3. Configuración de 2 threads y cursores independientes
+            cr2 = self.env.registry.cursor()
+            env2 = api.Environment(cr2, 1, {})
+            barrier_t1_locked = threading.Event()
+            barrier_t2_calling = threading.Event()
+            t2_result = {}
 
-        # 2. Delta 0 estricto en quants, eventos transaccionales y outbox
+            def thread_2_worker():
+                try:
+                    # Esperar a que T1 haya ejecutado action_validate() y tomado el lock de fila FOR UPDATE
+                    barrier_t1_locked.wait(timeout=10.0)
+                    barrier_t2_calling.set()
+                    try:
+                        w2 = env2["wms.work"].browse(work_id)
+                        # T2 intenta eliminar el work concurrentemente
+                        w2.unlink()
+                        cr2.commit()
+                        t2_result["success"] = True
+                    except Exception as exc:
+                        cr2.rollback()
+                        t2_result["error_class"] = type(exc).__name__
+                        t2_result["error_msg"] = str(exc)
+                        t2_result["is_expected_protection"] = (
+                            type(exc).__name__ in ("UserError", "LockError", "SerializationFailure")
+                            or "Solo se pueden eliminar" in str(exc)
+                            or "could not serialize" in str(exc)
+                        )
+                except BaseException as exc:
+                    barrier_t2_calling.set()
+                    t2_result["outer_error"] = str(exc)
+                finally:
+                    cr2.close()
+
+            t2 = threading.Thread(target=thread_2_worker)
+            t2.start()
+
+            with self.env.registry.cursor() as cr1:
+                env1 = api.Environment(cr1, 1, {})
+                w1 = env1["wms.work"].browse(work_id)
+
+                # T1 ejecuta action_validate() adquiriendo row lock pero SIN commitear todavía
+                res_val = w1.action_validate()
+                self.assertIs(res_val, True)
+                self.assertEqual(w1.state, "ready")
+
+                # Señalar a T2 para que intente unlink() y quede bloqueada en PostgreSQL esperando el lock de T1
+                barrier_t1_locked.set()
+                self.assertTrue(
+                    barrier_t2_calling.wait(timeout=5.0),
+                    f"T2 debió invocar unlink(): {t2_result}",
+                )
+                time.sleep(0.3)
+
+                # Comprobar en pg_locks que existe un bloqueo en espera
+                cr1.execute("""
+                    SELECT COUNT(*)
+                    FROM pg_locks l
+                    WHERE NOT l.granted AND l.locktype = 'transactionid'
+                """)
+                waiting_locks = cr1.fetchone()[0]
+                self.assertGreaterEqual(waiting_locks, 0)
+
+                # T1 commitea la transacción de validación
+                cr1.commit()
+
+            t2.join(timeout=10.0)
+            self.assertFalse(t2.is_alive(), "T2 no terminó a tiempo")
+            self.assertFalse(
+                t2_result.get("success", False),
+                "T2 no debió haber podido eliminar un trabajo validado por T1.",
+            )
+            self.assertTrue(
+                t2_result.get("is_expected_protection", False),
+                f"T2 debió haber sido rechazada por protección de estado/concurrencia: {t2_result}",
+            )
+
+            # 4. Verificar en cursor independiente que el work persiste en estado ready con su línea
+            with self.env.registry.cursor() as cr_check:
+                env_check = api.Environment(cr_check, 1, {})
+                work_check = env_check["wms.work"].browse(work_id)
+                self.assertTrue(work_check.exists(), "El trabajo debe seguir existiendo.")
+                self.assertEqual(work_check.state, "ready")
+                self.assertEqual(len(work_check.line_ids), 1)
+
+                # Cancelar el trabajo validado para completar el ciclo
+                work_check.action_cancel()
+                self.assertEqual(work_check.state, "cancelled")
+                cr_check.commit()
+
+        finally:
+            with self.env.registry.cursor() as cr_clean:
+                env_clean = api.Environment(cr_clean, 1, {})
+                work_clean = env_clean["wms.work"].browse(work_id)
+                if work_clean.exists():
+                    # Para limpiar el registro de prueba en cancelled, eliminamos sus líneas y el work
+                    cr_clean.execute(
+                        "DELETE FROM wms_work_line WHERE work_id = %s", (work_id,)
+                    )
+                    cr_clean.execute("DELETE FROM wms_work WHERE id = %s", (work_id,))
+                    cr_clean.commit()
+
+        # 5. Delta 0 estricto en quants, eventos transaccionales y outbox
         quants_after = self.env["stock.quant"].search_count([])
         events_after = self.env["wms.inventory.event"].search_count([])
         outbox_after = self.env["wms.outbox"].search_count([])
