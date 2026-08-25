@@ -49,10 +49,17 @@ Módulo del dominio de Trabajo Dirigido y Ejecución (Work Execution) para el Wa
   - System Admin: Permisos completos CRUD (1, 1, 1, 1).
   - Reglas globales multi-compañía para `wms.work` y `wms.work.line` (`company_id in company_ids`).
 
-### 4. Capacidades Deliberadamente Diferidas (WORK-003+)
+### 4. Capacidades Implementadas en WORK-003
+- **Máquina de Estados de Preparación**:
+  - Transiciones controladas: `DRAFT ──action_validate()──▶ READY ──action_cancel()──▶ CANCELLED`.
+  - Primitive privada `_wms_transition_state(target_state)` con `FOR UPDATE SKIP LOCKED` y semántica atómica all-or-nothing.
+  - Validación de líneas obligatorias para pasar a `READY`.
+  - Inmutabilidad de cabecera y líneas fuera de `DRAFT`.
+  - Idempotencia en re-ejecución de acciones sobre el estado objetivo.
+
+### 5. Capacidades Deliberadamente Diferidas (WORK-004+)
 Conforme al enfoque incremental del proyecto, las siguientes capacidades quedan explícitamente diferidas:
-- Máquina de estados operativa y validación de transiciones de ciclo de vida (WORK-003).
-- Protocolo de atomic claim, lease temporal y heartbeat (ADR-015, ADR-016).
+- Protocolo de atomic claim, lease temporal y heartbeat (WORK-004+, ADR-015, ADR-016).
 - Protocolo ACCEPT como invariante de ejecución del dominio (Work Execution v1.2), con interacción offline acotada a trabajo previamente asignado (ADR-017) y reconciliación por expiración de lease (ADR-025).
 - Detección de expiración de lease, auto-requeue (`RECLAIMABLE -> READY`) y reconciliación obligatoria (`RECONCILIATION_REQUIRED`, ADR-025).
 - Comandos transaccionales idempotentes (ADR-010).
@@ -67,8 +74,8 @@ Conforme al enfoque incremental del proyecto, las siguientes capacidades quedan 
 | Tarea | Capacidad | Estado |
 |---|---|---|
 | **WORK-001** | Work Engine Bootstrap (Scaffold & Dependencies) | ✅ Merged |
-| **WORK-002** | Work Core Data Models (`wms.work`, `wms.work.line`) | 🔧 Current |
-| **WORK-003+** | Work Lifecycle & State Machine | ⏸ Diferido |
+| **WORK-002** | Work Core Data Models (`wms.work`, `wms.work.line`) | ✅ Merged |
+| **WORK-003** | Work Preparation Lifecycle & State Machine | 🔧 Current |
 | **WORK-004+** | Atomic Claim & Lease Protocol (ADR-015, ADR-016) | ⏸ Diferido |
 | **WORK-005+** | Work Execution Commands & ADR-019 Integration | ⏸ Diferido |
 | **WORK-006+** | Lease Expiration, Reclaim & Reconciliation (ADR-025) | ⏸ Diferido |

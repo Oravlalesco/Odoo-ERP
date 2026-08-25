@@ -132,6 +132,8 @@ stateDiagram-v2
 | **Cancelado** | Cancelled | Trabajo cancelado |
 
 > **Nota v1.2**: `CLAIMED` ya no existe como estado persistente. El claim atómico (<50ms) transiciona directamente de `READY` a `ASSIGNED` en una sola transacción.
+>
+> **Nota de Implementación (WORK-003)**: El slice WORK-003 implementa las transiciones de preparación `DRAFT ──action_validate()──▶ READY ──action_cancel()──▶ CANCELLED`. Las transiciones operacionales (`ASSIGNED`, `IN_PROGRESS`, `COMPLETED`, `EXCEPTION`, `RECLAIMABLE`, `RECONCILIATION_REQUIRED`) permanecen diferidas a los slices WORK-004+.
 
 ### ⚠️ Invariante de Ejecución: ACCEPT Protocol
 
