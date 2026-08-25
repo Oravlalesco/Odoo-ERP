@@ -93,6 +93,21 @@ class TestWorkSecurity(WorkCommon):
         with self.assertRaises(AccessError):
             work_sup.unlink()
 
+        # Líneas para Supervisor
+        line_sup = self.line_a.with_user(self.user_supervisor)
+        self.assertEqual(line_sup.action, "pick")
+        with self.assertRaises(AccessError):
+            self.env["wms.work.line"].with_user(self.user_supervisor).create({
+                "work_id": self.work_a.id,
+                "sequence": 99,
+                "action": "put",
+                "source_location_id": self.loc_source_a.id,
+            })
+        with self.assertRaises(AccessError):
+            line_sup.write({"quantity": 10.0})
+        with self.assertRaises(AccessError):
+            line_sup.unlink()
+
         # 3. Manager WMS: Read-Only (Create, Write, Unlink prohibidos en WORK-002)
         work_mgr = self.work_a.with_user(self.user_manager)
         self.assertEqual(work_mgr.reference, self.work_a.reference)
@@ -105,7 +120,22 @@ class TestWorkSecurity(WorkCommon):
         with self.assertRaises(AccessError):
             work_mgr.unlink()
 
-        # 4. System Admin: Full CRUD
+        # Líneas para Manager
+        line_mgr = self.line_a.with_user(self.user_manager)
+        self.assertEqual(line_mgr.action, "pick")
+        with self.assertRaises(AccessError):
+            self.env["wms.work.line"].with_user(self.user_manager).create({
+                "work_id": self.work_a.id,
+                "sequence": 99,
+                "action": "put",
+                "source_location_id": self.loc_source_a.id,
+            })
+        with self.assertRaises(AccessError):
+            line_mgr.write({"quantity": 10.0})
+        with self.assertRaises(AccessError):
+            line_mgr.unlink()
+
+        # 4. System Admin: Full CRUD (Header + Lines)
         work_sys = self.env["wms.work"].with_user(self.user_system).create({
             "warehouse_id": self.warehouse_a.id,
             "priority": 75,
@@ -113,6 +143,19 @@ class TestWorkSecurity(WorkCommon):
         self.assertEqual(work_sys.priority, 75)
         work_sys.write({"priority": 85})
         self.assertEqual(work_sys.priority, 85)
+
+        line_sys = self.env["wms.work.line"].with_user(self.user_system).create({
+            "work_id": work_sys.id,
+            "sequence": 10,
+            "action": "put",
+            "source_location_id": self.loc_source_a.id,
+            "product_id": self.product_a.id,
+            "quantity": 12.0,
+        })
+        self.assertEqual(line_sys.quantity, 12.0)
+        line_sys.write({"quantity": 15.0})
+        self.assertEqual(line_sys.quantity, 15.0)
+        line_sys.unlink()
         work_sys.unlink()
 
     def test_work_16_multi_company_isolation(self):

@@ -73,9 +73,19 @@ class WorkCommon(TransactionCase):
         # UOMs
         cls.uom_unit = cls.env.ref("uom.product_uom_unit")
         cls.uom_dozen = cls.env.ref("uom.product_uom_dozen")
+        cls.uom_dozen.write({"active": True})
         cls.uom_kg = cls.env.ref("uom.product_uom_kgm")
         cls.uom_gram = cls.env.ref("uom.product_uom_gram")
         cls.uom_meter = cls.env.ref("uom.product_uom_meter")
+
+        # UOM separada vinculada únicamente vía product.uom (caso negativo)
+        cls.uom_box = cls.Uom.create({
+            "name": "Box of 24",
+            "factor": 24.0,
+            "relative_uom_id": cls.uom_unit.id,
+            "relative_factor": 24.0,
+            "active": True,
+        })
 
         # Productos
         cls.product_a = cls.Product.create({
@@ -85,10 +95,14 @@ class WorkCommon(TransactionCase):
             "uom_id": cls.uom_unit.id,
             "company_id": cls.company_a.id,
         })
+        cls.product_a.product_tmpl_id.write({
+            "uom_ids": [Command.link(cls.uom_dozen.id)],
+        })
+        # Fixture negativo: uom_box existe SOLO en product.uom (packaging), NO en product.uom_ids
         cls.env["product.uom"].create({
             "product_id": cls.product_a.id,
-            "uom_id": cls.uom_dozen.id,
-            "barcode": "BC-DOZEN-ALPHA",
+            "uom_id": cls.uom_box.id,
+            "barcode": "BC-BOX24-ALPHA",
         })
 
         cls.product_b = cls.Product.create({

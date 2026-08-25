@@ -234,6 +234,20 @@ class TestWorkLineCore(WorkCommon):
                 "quantity": 1.0,
             })
 
+        # 5b. UOM existente SOLO en product.uom (barcode packaging) y no en product.uom_ids -> rechazada
+        self.assertIn(self.uom_dozen, self.product_a.uom_ids)
+        self.assertNotIn(self.uom_box, self.product_a.uom_ids)
+        with self.assertRaises(ValidationError):
+            self.env["wms.work.line"].create({
+                "work_id": self.work_a.id,
+                "sequence": 55,
+                "action": "pick",
+                "source_location_id": self.loc_source_a.id,
+                "product_id": self.product_a.id,
+                "product_uom_id": self.uom_box.id,
+                "quantity": 1.0,
+            })
+
         # 6. Lote de otro producto -> rechazado
         with self.assertRaises(ValidationError):
             self.env["wms.work.line"].create({

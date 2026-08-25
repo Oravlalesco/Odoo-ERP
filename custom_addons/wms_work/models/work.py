@@ -35,7 +35,6 @@ class WmsWork(models.Model):
         readonly=True,
         copy=False,
         default="/",
-        index=True,
     )
     warehouse_id = fields.Many2one(
         "stock.warehouse",

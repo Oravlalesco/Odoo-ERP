@@ -158,11 +158,7 @@ class WmsWorkLine(models.Model):
                     raise ValidationError(
                         "El lote no corresponde al producto especificado."
                     )
-                valid_uoms = (
-                    record.product_id.uom_id
-                    | record.product_id.uom_ids
-                    | record.product_id.product_uom_ids.uom_id
-                )
+                valid_uoms = record.product_id.uom_id | record.product_id.uom_ids
                 if record.product_uom_id and record.product_uom_id not in valid_uoms:
                     raise ValidationError(
                         "La unidad de medida no pertenece a las unidades de medida autorizadas del producto."
