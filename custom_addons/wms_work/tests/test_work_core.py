@@ -20,7 +20,12 @@ class TestWorkCore(WorkCommon):
         self.assertEqual(Work._rec_name, "reference")
         self.assertEqual(Work._order, "priority desc, deadline asc, id")
 
-        expected_fields = [
+        standard_fields = {
+            "id", "display_name", "create_uid", "create_date",
+            "write_uid", "write_date", "__last_update",
+        }
+        actual_functional_fields = set(Work._fields.keys()) - standard_fields
+        expected_functional_fields = {
             "reference",
             "warehouse_id",
             "company_id",
@@ -28,13 +33,8 @@ class TestWorkCore(WorkCommon):
             "priority",
             "deadline",
             "line_ids",
-        ]
-        for field_name in expected_fields:
-            self.assertIn(
-                field_name,
-                Work._fields,
-                f"El campo '{field_name}' debe existir en wms.work.",
-            )
+        }
+        self.assertEqual(actual_functional_fields, expected_functional_fields)
 
         # Validar propiedades de los campos
         self.assertTrue(Work._fields["reference"].required)

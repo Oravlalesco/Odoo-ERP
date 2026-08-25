@@ -397,6 +397,11 @@ class TestWorkLifecycle(WorkCommon):
 
             def thread_2_worker():
                 try:
+                    # Capturar el PID de PostgreSQL de T2
+                    cr2.execute("SELECT pg_backend_pid()")
+                    t2_pid = cr2.fetchone()[0]
+                    t2_result["pid"] = t2_pid
+
                     # Esperar a que T1 haya ejecutado action_validate() y tomado el lock de fila FOR UPDATE
                     barrier_t1_locked.wait(timeout=10.0)
                     barrier_t2_calling.set()
@@ -428,6 +433,10 @@ class TestWorkLifecycle(WorkCommon):
                 env1 = api.Environment(cr1, 1, {})
                 w1 = env1["wms.work"].browse(work_id)
 
+                # Capturar el PID de PostgreSQL de T1
+                cr1.execute("SELECT pg_backend_pid()")
+                t1_pid = cr1.fetchone()[0]
+
                 # T1 ejecuta action_validate() adquiriendo row lock pero SIN commitear todavía
                 res_val = w1.action_validate()
                 self.assertIs(res_val, True)
@@ -439,16 +448,22 @@ class TestWorkLifecycle(WorkCommon):
                     barrier_t2_calling.wait(timeout=5.0),
                     f"T2 debió invocar unlink(): {t2_result}",
                 )
-                time.sleep(0.3)
 
-                # Comprobar en pg_locks que existe un bloqueo en espera
-                cr1.execute("""
-                    SELECT COUNT(*)
-                    FROM pg_locks l
-                    WHERE NOT l.granted AND l.locktype = 'transactionid'
-                """)
-                waiting_locks = cr1.fetchone()[0]
-                self.assertGreaterEqual(waiting_locks, 0)
+                # Comprobar deterministamente mediante pg_blocking_pids que T2 está bloqueado por T1
+                t2_pid = t2_result.get("pid")
+                t2_blocked_by_t1 = False
+                for _ in range(40):
+                    if t2_pid:
+                        cr1.execute("SELECT %s = ANY(pg_blocking_pids(%s))", (t1_pid, t2_pid))
+                        if cr1.fetchone()[0]:
+                            t2_blocked_by_t1 = True
+                            break
+                    time.sleep(0.05)
+
+                self.assertTrue(
+                    t2_blocked_by_t1,
+                    f"T2 (PID {t2_pid}) debió quedar bloqueada por T1 (PID {t1_pid}) esperando el row lock.",
+                )
 
                 # T1 commitea la transacción de validación
                 cr1.commit()

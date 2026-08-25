@@ -13,6 +13,30 @@ Guía para diseñar modelos de datos en Odoo 19 respetando los ADRs y convencion
 
 ---
 
+## 🛡️ Líneas Rojas y Reglas de Diseño Anti-Laxo (OBLIGATORIO)
+
+Cualquier modelo desarrollado en este proyecto DEBE cumplir estrictamente estas reglas:
+
+1. **Regla de Idioma Estricta**:
+   - Identificadores técnicos (nombres de clases, métodos, campos, selection keys) SIEMPRE en inglés (ej: `wms_location_role`, `state = fields.Selection([('STORAGE', 'Almacenamiento'), ...])`).
+   - Todos los atributos visibles (`string`, `help`, `_description`), docstrings y comentarios de código DEBEN ser **100% en español**.
+
+2. **Precisión Cuantitativa en Odoo 19 (ADR-027)**:
+   - Para cantidades de producto / stock, usar SIEMPRE `digits='Product Unit'`.
+   - **PROHIBIDO** usar el string antiguo `'Product Unit of Measure'`.
+
+3. **Prohibición de Defaults Mágicos**:
+   - **PROHIBIDO** inyectar `default=lambda self: self.env.company` o defaults en campos `Many2one` a menos que el contrato de la tarea lo exija explícitamente.
+   - En modelos transaccionales, de eventos o journals, la compañía y relaciones deben ser explícitas.
+
+4. **Defensa contra Inyección de Contexto en Seguridad**:
+   - Si un campo tiene mutación restringida (ej: solo `Manager`), el método `create()` y `write()` DEBE validar y neutralizar cualquier intento de inyección vía `self.env.context` (como `default_<campo>`).
+
+5. **Aislamiento Multi-Compañía en el Modelo**:
+   - Todo modelo que pertenezca a una compañía debe declarar `_check_company_auto = True`, y en sus campos relacionales `check_company=True`.
+
+---
+
 ## Tipos de Herencia en Odoo
 
 ### 1. Extensión in-place (`_inherit` sin `_name`)
@@ -34,22 +58,22 @@ class StockLocationWms(models.Model):
     #   Si wms_location_role tiene valor, usage DEBE ser 'internal'.
     #   Nunca modificar ni agregar valores a stock.location.usage.
     wms_location_role = fields.Selection([
-        ('STORAGE', 'Storage'),
-        ('RESERVE_STORAGE', 'Reserve Storage'),
-        ('PICK_FACE', 'Pick Face'),
-        ('RECEIVING', 'Receiving'),
-        ('QUALITY_HOLD', 'Quality Hold'),
-        ('QUARANTINE', 'Quarantine'),
-        ('DAMAGE', 'Damage'),
-        ('STAGING', 'Staging'),
-        ('CONSOLIDATION', 'Consolidation'),
-        ('PACKING', 'Packing'),
+        ('STORAGE', 'Almacenamiento'),
+        ('RESERVE_STORAGE', 'Almacenamiento de reserva'),
+        ('PICK_FACE', 'Posición de picking'),
+        ('RECEIVING', 'Recepción'),
+        ('QUALITY_HOLD', 'Retención de calidad'),
+        ('QUARANTINE', 'Cuarentena'),
+        ('DAMAGE', 'Mercadería dañada'),
+        ('STAGING', 'Área de preparación'),
+        ('CONSOLIDATION', 'Consolidación'),
+        ('PACKING', 'Empaque'),
         ('CROSS_DOCK', 'Cross-Dock'),
-        ('DOCK', 'Dock'),
-    ], string='WMS Location Role', default=False,
-       help='Operational function of this location within the WMS. '
-            'Does not replace stock.location.usage. '
-            'Only valid on locations with usage=internal.')
+        ('DOCK', 'Muelle'),
+    ], string='Rol WMS de Ubicación', default=False,
+       help='Función operacional de esta ubicación dentro del WMS. '
+            'No reemplaza stock.location.usage. '
+            'Solo válido en ubicaciones con usage=internal.')
     pick_sequence = fields.Integer(
         string='Secuencia de picking',
         help='Orden de recorrido para picking optimizado')
@@ -173,7 +197,7 @@ Odoo consolida quants con `_merge_quants()` agrupando por:
 ```python
 name = fields.Char(string='Nombre', required=True, translate=True)
 description = fields.Text(string='Descripción')
-quantity = fields.Float(string='Cantidad', digits='Product Unit of Measure')
+quantity = fields.Float(string='Cantidad', digits='Product Unit')
 is_active = fields.Boolean(string='Activo', default=True)
 date_planned = fields.Datetime(string='Fecha planificada')
 amount = fields.Monetary(string='Monto', currency_field='currency_id')
@@ -358,9 +382,13 @@ Para un resumen ejecutivo, ver [references/capability-matrix-summary.md](./refer
 
 ## Verificación
 
-1. ¿El modelo tiene `_description` en español?
-2. ¿Todos los `Many2one` tienen `ondelete` definido?
-3. ¿Las constraints usan `models.Constraint()` (no `_sql_constraints`)?
-4. ¿Se verificó la Capability Matrix para no recrear algo que Odoo ya tiene?
-5. ¿Se respetan los ADRs (011, 012, 013, 026)?
-6. ¿Los campos computed con `store=True` tienen `@api.depends` correcto?
+1. ¿Todos los `string`, `help`, `_description` y comentarios están **100% en español**?
+2. ¿Los campos de cantidad usan `digits='Product Unit'` (no `'Product Unit of Measure'`)?
+3. ¿No se inyectaron `default` innecesarios (especialmente en `company_id` o `Many2one`)?
+4. ¿Todos los `Many2one` tienen `ondelete` definido explícitamente?
+5. ¿Las constraints usan `models.Constraint()` (no `_sql_constraints`)?
+6. ¿Se verificó la Capability Matrix para no duplicar modelos de Odoo?
+7. ¿Se respetan los ADRs (011, 012, 013, 019, 026)?
+8. ¿Los campos computed con `store=True` tienen `@api.depends` correcto?
+9. ¿Los métodos `create()` protegen contra `default_<campo>` maliciosos en `self.env.context`?
+10. ¿Los modelos multi-compañía tienen `_check_company_auto = True` y `check_company=True`?

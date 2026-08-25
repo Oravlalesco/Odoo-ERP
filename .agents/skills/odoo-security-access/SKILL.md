@@ -13,6 +13,29 @@ Guía para configurar grupos, ACLs, record rules y RBAC en módulos Odoo 19.
 
 > **ADR-023**: Security es un cross-cutting concern — cada motor WMS desde su primera versión debe respetar RBAC.
 
+## 🛡️ Reglas de Seguridad Autoritativa en Servidor (OBLIGATORIO)
+
+1. **La Interfaz NO es Seguridad (Server-Side Enforcement Obligatorio)**:
+   - `readonly="1"`, `invisible="..."` y ocultar menús en XML son facilidades visuales para el usuario, **NO son barreras de seguridad**.
+   - Toda regla de negocio o restricción de permisos (ej. solo `Manager` puede editar una configuración, o `Operator` solo puede leer) DEBE estar implementada y forzada en Python dentro de `create()`, `write()`, `unlink()` o mediante `ir.rule`.
+   - Si un usuario no autorizado intenta enviar valores por RPC / API, el servidor DEBE rechazar la petición lanzando `AccessError` o `UserError`.
+
+2. **Neutralización de Inyección de Defaults por Contexto**:
+   - En métodos `create()`, verificar que un usuario sin privilegios no esté pasando `default_<campo_restringido>` en `self.env.context` para burlar las validaciones.
+
+3. **Aislamiento Multi-Compañía Obligatorio**:
+   - Todo modelo que maneje datos de una empresa debe contar con su `ir.rule` global `[('company_id', 'in', company_ids)]`.
+   - Si el modelo admite registros globales compartidos (`company_id = False`), la regla debe usar:
+     `['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]`.
+
+4. **Prohibición de `sudo()` Injustificado**:
+   - **PROHIBIDO** usar `.sudo()` para eludir chequeos de seguridad o enmascarar errores de permisos de usuario.
+   - El código operacional debe correr siempre bajo la identidad real del usuario (`self.env.user`).
+
+5. **Regla de Idioma en Seguridad**:
+   - Identificadores XML (`id="..."`) en inglés.
+   - Nombres visibles (`<field name="name">...</field>`), comentarios y descripciones de grupos **100% en español**.
+
 > **⚠️ BREAKING CHANGE en Odoo 19**: El modelo de seguridad cambió de 2 a 3 niveles.
 > `res.groups` ya NO usa `category_id`. Usa `privilege_id` que apunta a `res.groups.privilege`.
 > Además, `res.users.groups_id` se renombró a `res.users.group_ids`.

@@ -28,6 +28,69 @@ custom_addons/wms_work_engine/
     └── common.py               # Clase base con datos compartidos
 ```
 
+---
+
+## 🛡️ Reglas de Testing Anti-Laxo y Adversarial (OBLIGATORIO)
+
+Para garantizar la robustez del WMS y evitar tests permisivos o cosméticos, todo test DEBE seguir estas reglas:
+
+### 1. Verificación Estricta de Schema (Exact Set Equality)
+- **PROHIBIDO** usar `assertIn` en bucles para validar los campos de un modelo (eso permite que campos no deseados o placeholders se cuelen sin ser detectados).
+- **OBLIGATORIO**: Restar los campos técnicos de Odoo y comparar igualdad exacta de conjuntos:
+
+```python
+standard_fields = {
+    'id', 'display_name', 'create_uid', 'create_date',
+    'write_uid', 'write_date', '__last_update'
+}
+model_fields = set(self.env['wms.inventory.block']._fields.keys())
+actual_functional_fields = model_fields - standard_fields
+expected_functional_fields = {
+    'company_id', 'block_scope', 'product_id', 'location_id',
+    'lot_id', 'package_id', 'owner_id', 'block_type', 'reason',
+    'blocked_by', 'blocked_at', 'released_by', 'released_at'
+}
+self.assertEqual(actual_functional_fields, expected_functional_fields)
+```
+
+### 2. Testing Negativo y Adversarial Obligatorio
+Un test que solo prueba el *Happy Path* no es suficiente. Cada suite DEBE incluir:
+- **Violación de Constraints**: Verificar que valores negativos, rangos inválidos o duplicados de `UNIQUE` lancen `ValidationError` o error de integridad.
+- **Seguridad RBAC (`AccessError`)**: Ejecutar operaciones con usuarios de roles inferiores (ej: `Operator` intentando borrar registros maestros) con `with self.assertRaises(AccessError):`.
+- **Aislamiento Multi-Compañía**: Verificar que un usuario de la Compañía A no pueda leer, modificar ni asociar registros de la Compañía B.
+- **Bypass de Contexto**: Probar que inyectar `default_<campo>` en `context` no permita a un usuario no autorizado saltarse restricciones de creación.
+
+### 3. Asignación Estricta de Parámetros
+- Probar que no existan defaults automáticos en campos relacionales que deben ser explícitos (`company_id`, etc.).
+- Probar que la precisión decimal de cantidades use `Product Unit`.
+
+### 4. Prohibición Absoluta de Aserciones Tautológicas (No Placebos)
+- **PROHIBIDO** escribir aserciones que sean matemáticamente verdaderas para cualquier salida del sistema:
+  - ❌ `self.assertGreaterEqual(count, 0)` con un `COUNT(*)` o `len()` ➔ **DEBE ser `self.assertGreater(count, 0)` o `self.assertEqual(count, expected)`**.
+  - ❌ `self.assertTrue(len(recordset) >= 0)` ➔ **DEBE ser `self.assertEqual(len(recordset), expected_len)`**.
+  - ❌ `self.assertIsNotNone(val)` cuando se espera un valor o estado específico.
+
+### 5. Testing de Concurrencia Determinista (Sin `time.sleep()`)
+- **PROHIBIDO** usar `time.sleep()` como mecanismo de sincronización para asumir que un hilo competidor ya adquirió o está esperando un lock de base de datos.
+- Las pruebas de concurrencia y bloqueo de filas (`FOR UPDATE`, `SKIP LOCKED`) DEBEN ser **deterministas**, usando introspección real de PostgreSQL:
+  ```python
+  # Obtener el PID del backend de T2
+  cr2.execute("SELECT pg_backend_pid()")
+  t2_pid = cr2.fetchone()[0]
+
+  # Comprobar que T2 está explícitamente bloqueado por T1
+  cr1.execute("SELECT pg_blocking_pids(%s)", (t2_pid,))
+  blocking_pids = cr1.fetchone()[0]
+  self.assertIn(t1_pid, blocking_pids, "T1 debe ser el proceso bloqueador de T2.")
+  ```
+- Usar `threading.Barrier` y eventos para coordinar los puntos de sincronización entre hilos.
+
+### 6. Principio de Falsabilidad (El Test del Test)
+- Todo test debe diseñarse bajo el principio: **«Si la lógica del sistema falla, el test DEBE fallar obligatoriamente»**.
+- Si un test pasa tanto si el bloqueo/validación ocurrió como si no ocurrió, el test es inválido y debe ser reescrito.
+
+---
+
 ### `tests/__init__.py`
 
 ```python

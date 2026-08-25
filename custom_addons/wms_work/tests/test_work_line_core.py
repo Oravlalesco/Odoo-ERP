@@ -24,7 +24,12 @@ class TestWorkLineCore(WorkCommon):
         self.assertEqual(Line._description, "Línea de Trabajo Dirigido WMS")
         self.assertEqual(Line._order, "work_id, sequence, id")
 
-        expected_fields = [
+        standard_fields = {
+            "id", "display_name", "create_uid", "create_date",
+            "write_uid", "write_date", "__last_update",
+        }
+        actual_functional_fields = set(Line._fields.keys()) - standard_fields
+        expected_functional_fields = {
             "work_id",
             "company_id",
             "sequence",
@@ -38,13 +43,8 @@ class TestWorkLineCore(WorkCommon):
             "result_package_id",
             "owner_id",
             "quantity",
-        ]
-        for field_name in expected_fields:
-            self.assertIn(
-                field_name,
-                Line._fields,
-                f"El campo '{field_name}' debe existir en wms.work.line.",
-            )
+        }
+        self.assertEqual(actual_functional_fields, expected_functional_fields)
 
         # Validar flags requeridos y de compañía
         self.assertTrue(Line._fields["work_id"].required)
