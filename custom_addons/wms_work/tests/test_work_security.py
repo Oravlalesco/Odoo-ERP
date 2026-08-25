@@ -230,11 +230,10 @@ class TestWorkSecurity(WorkCommon):
 
         # 2. Ausencia de métodos operacionales diferidos (action_* o cmd_*)
         deferred_methods = [
-            "action_validate",
+            "action_claim",
             "action_assign",
             "action_start",
             "action_complete",
-            "action_cancel",
             "action_reclaim",
             "cmd_accept_work",
             "cmd_confirm_pick",

@@ -1,7 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 from odoo import api, fields, models
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
 
 class WmsWorkLine(models.Model):
@@ -9,6 +9,7 @@ class WmsWorkLine(models.Model):
 
     WORK-002: Representa una instrucción física unitaria dentro de un trabajo
     dirigido WMS (ADR-002, ADR-003).
+    WORK-003: Inmutabilidad estructural y concurrencia (solo modificable en DRAFT).
     """
 
     _name = "wms.work.line"
@@ -124,12 +125,46 @@ class WmsWorkLine(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
+        work_ids = self.env["wms.work"].browse(
+            {v["work_id"] for v in vals_list if v.get("work_id")}
+        )
+        if work_ids:
+            work_ids.lock_for_update()
+            for work in work_ids:
+                if work.state != "draft":
+                    raise UserError(
+                        "No se pueden agregar líneas a una tarea de trabajo que no esté en estado borrador."
+                    )
         for vals in vals_list:
             if vals.get("product_id") and not vals.get("product_uom_id"):
                 product = self.env["product.product"].browse(vals["product_id"])
                 if product.exists() and product.uom_id:
                     vals["product_uom_id"] = product.uom_id.id
         return super().create(vals_list)
+
+    def write(self, vals):
+        work_ids = self.mapped("work_id")
+        if vals.get("work_id"):
+            work_ids |= self.env["wms.work"].browse(vals["work_id"])
+        if work_ids:
+            work_ids.lock_for_update()
+            for work in work_ids:
+                if work.state != "draft":
+                    raise UserError(
+                        "No se pueden modificar líneas de una tarea de trabajo que no esté en estado borrador."
+                    )
+        return super().write(vals)
+
+    def unlink(self):
+        work_ids = self.mapped("work_id")
+        if work_ids:
+            work_ids.lock_for_update()
+            for work in work_ids:
+                if work.state != "draft":
+                    raise UserError(
+                        "No se pueden eliminar líneas de una tarea de trabajo que no esté en estado borrador."
+                    )
+        return super().unlink()
 
     @api.constrains("quantity")
     def _check_quantity(self):

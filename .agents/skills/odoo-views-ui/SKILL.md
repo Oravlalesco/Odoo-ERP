@@ -11,6 +11,25 @@ description: >-
 
 Guía para crear vistas XML, menús y acciones en módulos Odoo 19.
 
+## 🛡️ Reglas de UI y Vistas Defensivas (OBLIGATORIO)
+
+1. **Bloqueo de Creación Rápida / al Vuelo (`no_create`)**:
+   - En formularios de maestros y operaciones, los campos relacionales (`Many2one`) hacia entidades configurables (bodegas, zonas, tipos de HU, UOMs, productos, etc.) DEBEN llevar:
+     ```xml
+     <field name="product_id" options="{'no_create': True, 'no_quick_create': True}"/>
+     ```
+   - Esto evita que los usuarios creen entidades maestras "al vuelo" desde un dropdown sin completar los campos obligatorios ni pasar por sus validaciones completas.
+
+2. **Declaración Explícita de `readonly="1"` en Campos Computados**:
+   - Todo campo computado, relacionado (`related=...`) o de solo lectura debe declarar explícitamente `readonly="1"` en la vista XML para evitar intentos de edición por frontend.
+
+3. **Regla Estricta de Idioma en UI**:
+   - Todo texto visible al usuario (`string="..."`, `placeholder="..."`, `title="..."`, `confirm="..."`, `<menuitem name="...">`, `<page string="...">`) DEBE ser **100% en español**.
+   - Los identificadores XML (`id="..."`, `name="..."`, `action="..."`) se mantienen en inglés.
+
+4. **Vistas de Búsqueda Completas**:
+   - Toda entidad debe contar con su vista `search` que incluya búsqueda por código/nombre, filtro de archivados (`[('active', '=', False)]`) si aplica, y agrupadores (`group_by`) por compañía/bodega.
+
 ---
 
 ## Tipos de Vista
