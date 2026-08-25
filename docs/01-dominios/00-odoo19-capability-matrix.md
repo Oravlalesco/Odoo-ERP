@@ -315,7 +315,7 @@ Estas no tienen equivalente en Odoo y se construyen completamente:
 
 | Dominio | Modelos principales |
 |---|---|
-| **Work Engine** | `wms.work`, `wms.work.line`, `wms.work_type`, `wms.work_class`, `wms.work_template` |
+| **Work Engine** | ✅ Persistencia core `wms.work`, `wms.work.line` (WORK-002); diferidos: `wms.work_type`, `wms.work_class`, `wms.work_template` |
 | **Queue Engine** | `wms.queue`, `wms.queue.assignment` |
 | **Resource Engine** | `wms.resource`, `wms.resource.type`, `wms.certification` |
 | **Assignment Engine** | `wms.assignment` (scoring, claim, lease) |

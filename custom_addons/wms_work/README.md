@@ -32,19 +32,26 @@ Módulo del dominio de Trabajo Dirigido y Ejecución (Work Execution) para el Wa
 - **WMS Handling Unit (`wms_handling_unit`)**:
   - Metadatos de ciclo de vida (`hu_state`, `hu_class`), secuencias GS1 SSCC-18 (`wms.sscc.sequence`) y primitives transaccionales de mutación física (`_wms_pack_physical()`, `_wms_unpack_physical()`, `_wms_split_physical()`, `_wms_merge_physical()`).
 
-### 3. Ownership del Dominio
-`wms_work` queda formalmente reservado como el módulo propietario de:
-- `wms.work`: Encabezado de trabajo dirigido.
-- `wms.work.line`: Líneas de detalle de trabajo dirigido.
-- Catálogos propios de Work (tipos de trabajo, prioridades, estrategias de agrupación).
-- Máquina de estados de ciclo de vida del trabajo y protocolo de lease/heartbeat.
-- Comandos de ejecución transaccional del Work Engine.
+### 3. Modelos Core de Persistencia (`wms.work` y `wms.work.line` — WORK-002)
+- **`wms.work` (Encabezado de Trabajo Dirigido)**:
+  - Identificador único global: `reference` asignado determinísticamente mediante secuencia (`seq_wms_work`, prefijo `WORK/`, padding 8).
+  - Almacén y compañía: `warehouse_id` requerido con `check_company=True` y `company_id` derivado indexado.
+  - Catálogo de estados canónicos (Work Execution v1.2): `draft`, `ready`, `assigned`, `in_progress`, `completed`, `exception`, `reclaimable`, `reconciliation_required`, `cancelled`.
+  - Prioridad determinista: `priority` (0 a 100, default 50) e índice compuesto `(state, priority desc, deadline asc, id)`.
+- **`wms.work.line` (Instrucción Física Unitaria)**:
+  - Relación: `work_id` requerido con `ondelete="cascade"` y `check_company=True`.
+  - Secuencia e integridad: `sequence` requerido con `UNIQUE(work_id, sequence)`.
+  - Catálogo de 8 acciones: `pick`, `put`, `move`, `count`, `replenishment`, `load`, `inspect`, `pack`.
+  - Dimensiones físicas: `source_location_id`, `dest_location_id`, `product_id`, `product_uom_id`, `lot_id`, `package_id`, `result_package_id`, `owner_id`, `quantity`.
+  - Invariantes dimensionales: UOM estricta al conjunto `{product_id.uom_id} ∪ product_id.uom_ids`, lote coincidente con el producto, y cantidad no negativa.
+- **Seguridad RBAC y Aislamiento Multi-Compañía**:
+  - Roles WMS (`Operator`, `Supervisor`, `Manager`): Permiso de solo lectura (1, 0, 0, 0) para prevenir mutaciones CRUD directas no autorizadas.
+  - System Admin: Permisos completos CRUD (1, 1, 1, 1).
+  - Reglas globales multi-compañía para `wms.work` y `wms.work.line` (`company_id in company_ids`).
 
-### 4. Capacidades Deliberadamente Diferidas
-Conforme al enfoque incremental del proyecto, este bootstrap (**WORK-001**) establece exclusivamente el scaffold y la verificación de dependencias. Las siguientes capacidades quedan explícitamente diferidas para slices funcionales posteriores:
-- Modelos de datos `wms.work` y `wms.work.line`.
-- Catálogos de tipos de trabajo y prioridades.
-- Máquina de estados de ciclo de vida (`DRAFT`, `READY`, `ASSIGNED`, `IN_PROGRESS`, `COMPLETED`, `EXCEPTION`, `RECLAIMABLE`, `RECONCILIATION_REQUIRED`, `CANCELLED` conforme a Work Execution v1.2).
+### 4. Capacidades Deliberadamente Diferidas (WORK-003+)
+Conforme al enfoque incremental del proyecto, las siguientes capacidades quedan explícitamente diferidas:
+- Máquina de estados operativa y validación de transiciones de ciclo de vida (WORK-003).
 - Protocolo de atomic claim, lease temporal y heartbeat (ADR-015, ADR-016).
 - Protocolo ACCEPT como invariante de ejecución del dominio (Work Execution v1.2), con interacción offline acotada a trabajo previamente asignado (ADR-017) y reconciliación por expiración de lease (ADR-025).
 - Detección de expiración de lease, auto-requeue (`RECLAIMABLE -> READY`) y reconciliación obligatoria (`RECONCILIATION_REQUIRED`, ADR-025).
@@ -59,8 +66,8 @@ Conforme al enfoque incremental del proyecto, este bootstrap (**WORK-001**) esta
 
 | Tarea | Capacidad | Estado |
 |---|---|---|
-| **WORK-001** | Work Engine Bootstrap (Scaffold & Dependencies) | 🔧 Current |
-| **WORK-002+** | Work Core Data Models (`wms.work`, `wms.work.line`) | ⏸ Diferido |
+| **WORK-001** | Work Engine Bootstrap (Scaffold & Dependencies) | ✅ Merged |
+| **WORK-002** | Work Core Data Models (`wms.work`, `wms.work.line`) | 🔧 Current |
 | **WORK-003+** | Work Lifecycle & State Machine | ⏸ Diferido |
 | **WORK-004+** | Atomic Claim & Lease Protocol (ADR-015, ADR-016) | ⏸ Diferido |
 | **WORK-005+** | Work Execution Commands & ADR-019 Integration | ⏸ Diferido |

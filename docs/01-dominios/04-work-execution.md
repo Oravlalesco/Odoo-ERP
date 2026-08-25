@@ -3,6 +3,8 @@
 > El componente más importante de toda la plataforma. Transforma necesidades logísticas en unidades de trabajo ejecutables y las distribuye a través de colas a los recursos disponibles.
 >
 > **v1.2**: Máquina de estados consolidada. `CLAIMED` simplificado a transitorio. `RECLAIMABLE` solo para ASSIGNED sin ejecución. `IN_PROGRESS` con lease expirado → `RECONCILIATION_REQUIRED` (ADR-025). ACCEPT protocol invariant.
+>
+> **Implementación**: Persistencia y modelos de datos core (`wms.work`, `wms.work.line`) implementados en `wms_work` (WORK-002).
 
 ---
 

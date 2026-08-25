@@ -21,7 +21,11 @@ ciclo de vida, protocolo de lease y comandos transaccionales del WMS.
         "wms_handling_unit",
         "stock",
     ],
-    "data": [],
+    "data": [
+        "security/wms_work_security.xml",
+        "security/ir.model.access.csv",
+        "data/wms_work_sequence.xml",
+    ],
     "installable": True,
     "application": False,
     "auto_install": False,
