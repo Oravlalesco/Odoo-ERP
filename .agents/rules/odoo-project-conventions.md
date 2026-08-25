@@ -2,6 +2,22 @@
 
 Estas reglas aplican a **todo el código** del proyecto. Son obligatorias y no negociables.
 
+## Autoridad documental
+
+Antes de planificar o modificar una capacidad WMS, el agente DEBE leer la documentación vigente directamente.
+
+Orden de autoridad:
+
+1. `docs/05-decisiones/01-adr.md`
+2. `docs/03-plataforma/`
+3. `docs/01-dominios/`
+4. `docs/04-roadmap/`
+5. README del módulo
+6. source/tests existentes
+7. skills auxiliares
+
+Las skills no pueden sobreescribir una decisión más reciente contenida en la documentación autoritativa. Si existe una contradicción, el agente debe detener la implementación y reportarla al coordinator/planner.
+
 ---
 
 ## Versión y Licencia

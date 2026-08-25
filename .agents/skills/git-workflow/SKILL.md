@@ -274,6 +274,20 @@ release/19.0.1.1.0
 
 ---
 
+## WMS Contracted Slice Mode
+
+Cuando existe un `CONTRACT STATUS: FROZEN`, este modo prevalece sobre las recomendaciones generales de sincronización diaria:
+
+- La base SHA queda congelada y la feature debe partir exactamente de ella.
+- No rebasear ni mergear `develop` automáticamente después del freeze.
+- Si `develop` cambia, continuar contra la base congelada salvo que el planner emita un `CONTRACT AMENDMENT` y vuelva a congelar el contrato.
+- Por defecto, usar un commit por slice; el rework de auditoría usa `git commit --amend` cuando el contrato exige exactamente un commit.
+- El candidate SHA aprobado queda congelado; cualquier cambio posterior invalida el `PASS`.
+- No hacer push directo a `develop`, force-push, merge automático ni crear PR sin habilitación explícita de la política humana.
+- No abrir PR antes de `PASS / READY FOR PR` del auditor.
+
+---
+
 ## Flujo Resumido
 
 ```text
