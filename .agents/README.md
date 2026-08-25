@@ -44,10 +44,13 @@ Los contratos, handoffs, auditorías y escalaciones se escriben en `.wms-agent-s
 Antes del primer slice autónomo:
 
 1. Abre **Customizations → Rules** y confirma que `wms-agent-governance` esté en modo **Always On**.
-2. Ejecuta `/agents` y verifica que `wms-coordinator` aparezca como main agent y que `wms-planner`, `wms-implementer` y `wms-auditor` estén disponibles como subagents.
-3. Selecciona `wms-coordinator` y solicita un discovery read-only que invoque únicamente a `wms-planner` con `Workspace=inherit`.
-4. Confirma en el panel de subagents que la invocación termina y retorna un contrato sin modificar archivos.
-5. Solo después habilita `/teamwork-preview` para un slice real.
+2. Abre **Customizations → Custom Agents** y confirma que se cargaron `wms-coordinator`, `wms-planner`, `wms-implementer` y `wms-auditor`.
+3. Ejecuta `/agents`, selecciona `wms-coordinator` como main agent e inicia una conversación nueva. Los workers aparecen en la sección **Subagents** después de ser invocados.
+4. Solicita un discovery read-only que invoque únicamente a `wms-planner` con `Workspace=inherit`.
+5. Confirma en el panel de subagents que la invocación termina y devuelve el reporte solicitado sin modificar archivos.
+6. Solo después habilita `/teamwork-preview` para un slice real.
+
+El coordinator declara `inheritCustomizations: true`; este ajuste es obligatorio para que un custom main agent pueda descubrir y reutilizar los subagents definidos en el workspace.
 
 ## Límites de autonomía
 

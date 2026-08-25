@@ -7,6 +7,7 @@ mainAgent: true
 subagent: false
 model: pro
 commandExecutionPolicy: sandbox
+inheritCustomizations: true
 tools:
   - view_file
   - grep_search
