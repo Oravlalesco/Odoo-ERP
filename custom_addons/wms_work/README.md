@@ -59,7 +59,7 @@ Módulo del dominio de Trabajo Dirigido y Ejecución (Work Execution) para el Wa
 
 ### 5. Capacidades Deliberadamente Diferidas (WORK-004+)
 Conforme al enfoque incremental del proyecto, las siguientes capacidades quedan explícitamente diferidas:
-- La secuencia ARCH-001 -> RES-001 -> QUEUE-001 precede a la implementación de ejecución.
+- La secuencia ARCH-001 -> RES-001 -> QUEUE-001 es una foundation obligatoria que precede a la implementación de ejecución en WORK-004. Se difieren los motores completos de Queue y Resource (asignación inteligente, scoring), pero sus modelos e identidades canónicas deben existir primero.
 - Protocolo de atomic claim, lease temporal y heartbeat (WORK-004+, ADR-015, ADR-016), ahora dependiendo de queue_id y assigned_resource_id reales.
 - Protocolo ACCEPT como invariante de ejecución del dominio (Work Execution v1.2), con interacción offline acotada a trabajo previamente asignado (ADR-017) y reconciliación por expiración de lease (ADR-025).
 - Detección de expiración de lease, auto-requeue (`RECLAIMABLE -> READY`) y reconciliación obligatoria (`RECONCILIATION_REQUIRED`, ADR-025).
