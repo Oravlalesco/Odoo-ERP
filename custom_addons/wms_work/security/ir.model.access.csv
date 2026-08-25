@@ -1,0 +1,9 @@
+id,name,model_id/id,group_id/id,perm_read,perm_write,perm_create,perm_unlink
+access_wms_work_operator,wms.work.operator,model_wms_work,wms_core.group_wms_operator,1,0,0,0
+access_wms_work_supervisor,wms.work.supervisor,model_wms_work,wms_core.group_wms_supervisor,1,0,0,0
+access_wms_work_manager,wms.work.manager,model_wms_work,wms_core.group_wms_manager,1,0,0,0
+access_wms_work_system,wms.work.system,model_wms_work,base.group_system,1,1,1,1
+access_wms_work_line_operator,wms.work.line.operator,model_wms_work_line,wms_core.group_wms_operator,1,0,0,0
+access_wms_work_line_supervisor,wms.work.line.supervisor,model_wms_work_line,wms_core.group_wms_supervisor,1,0,0,0
+access_wms_work_line_manager,wms.work.line.manager,model_wms_work_line,wms_core.group_wms_manager,1,0,0,0
+access_wms_work_line_system,wms.work.line.system,model_wms_work_line,base.group_system,1,1,1,1
