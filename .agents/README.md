@@ -47,7 +47,7 @@ Antes del primer slice autónomo:
 2. Abre **Customizations → Custom Agents** y confirma que se cargaron `wms-coordinator`, `wms-planner`, `wms-implementer` y `wms-auditor`.
 3. Ejecuta `/agents`, selecciona `wms-coordinator` como main agent e inicia una conversación nueva. Los workers aparecen en la sección **Subagents** después de ser invocados.
 4. Solicita un discovery read-only que invoque únicamente a `wms-planner` con `Workspace=inherit`.
-5. Confirma en el panel de subagents que la invocación termina y devuelve el reporte solicitado sin modificar archivos.
+5. Confirma en el panel de subagents que la invocación termina y devuelve el reporte solicitado sin modificar archivos. Contrasta además el último slice merged contra el first-parent de `develop` y exige un siguiente task ID concreto; una fase completa no basta.
 6. Solo después habilita `/teamwork-preview` para un slice real.
 
 El coordinator declara `inheritCustomizations: true`; este ajuste es obligatorio para que un custom main agent pueda descubrir y reutilizar los subagents definidos en el workspace.

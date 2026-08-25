@@ -30,7 +30,7 @@ DISCOVERY -> PLANNING -> CONTRACT_FROZEN -> IMPLEMENTATION
 ```
 
 1. Invoca `wms-planner` con `Workspace=inherit` y contexto del repositorio actual.
-2. No permite implementación hasta recibir `CONTRACT STATUS: FROZEN`.
+2. No permite implementación hasta recibir `CONTRACT STATUS: FROZEN`. Rechaza el handoff si no incluye evidencia del first-parent de `develop`, último slice merged y siguiente task ID incremental exacto, o si contradice README/source/tests; devuelve el gap al planner sin corregir el contrato por cuenta propia.
 3. Invoca `wms-implementer` con `Workspace=branch` para crear un Git worktree aislado y exige candidate SHA, ruta del worktree y gates.
 4. Invoca `wms-auditor` con contexto limpio, acceso read-only y la ruta explícita del candidate worktree.
 5. Si hay P0/P1, usa `send_message` para devolver únicamente los findings al mismo implementer y repite la auditoría sobre el nuevo candidate SHA.
