@@ -25,8 +25,8 @@ Un WMS industrial necesita una representación completa del **recurso** (humano 
 ## Propósito
 
 1. Modelar operadores y equipos como **recursos** con capacidades específicas
-2. Determinar compatibilidad entre recursos y colas de trabajo
-3. Implementar un **Assignment Engine** (motor de asignación) que seleccione el trabajo óptimo para cada recurso
+2. Proveer las identidades canónicas (`wms.resource` y `wms.queue`) y establecer compatibilidades mínimas.
+3. Separar responsabilidades: Resource/Queue Core define las identidades; Assignment Engine se encarga del scoring, priorización, retries y elección de cola.
 
 ---
 
