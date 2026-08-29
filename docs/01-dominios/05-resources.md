@@ -223,3 +223,17 @@ graph LR
 ---
 
 *Documento derivado de las secciones 10-11 del [Plan Maestro](../plan.md).*
+
+
+### Especificación técnica del satélite wms.resource (ADR-028)
+
+El modelo `wms.resource` actúa como un satélite 1:0..1 sobre `resource.resource` de Odoo 19.
+Se limita a 3 campos funcionales:
+- `resource_id`: (Many2one) Enlace al recurso nativo (`resource.resource`), requerido, con restricción `UNIQUE`.
+- `warehouse_id`: (Many2one) Enlace a la bodega (`stock.warehouse`), requerido.
+- `company_id`: (Many2one) Derivado de `warehouse_id.company_id`.
+
+Restricciones e Invariantes:
+- `resource_id.company_id == company_id` (rechazar compañía nula o divergente).
+- Si `resource_id.resource_type == 'user'`, `resource_id.user_id` es obligatorio.
+- Protección contra drift en `resource.resource.write()` sin `sudo`.

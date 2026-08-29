@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Multi-compañía global -->
+        <record id="wms_resource_company_rule" model="ir.rule">
+            <field name="name">wms.resource company rule</field>
+            <field name="model_id" ref="model_wms_resource"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+            <field name="global" eval="True"/>
+        </record>
+
+        <!-- Operator own (solo lectura) -->
+        <record id="wms_resource_operator_rule" model="ir.rule">
+            <field name="name">wms.resource operator rule</field>
+            <field name="model_id" ref="model_wms_resource"/>
+            <field name="domain_force">[('resource_id.user_id', '=', user.id)]</field>
+            <field name="groups" eval="[(4, ref('wms_core.group_wms_operator'))]"/>
+            <field name="perm_read" eval="True"/>
+            <field name="perm_write" eval="False"/>
+            <field name="perm_create" eval="False"/>
+            <field name="perm_unlink" eval="False"/>
+        </record>
+
+        <!-- Supervisor / Manager all (solo lectura, manager CRUD por ACL) -->
+        <record id="wms_resource_supervisor_manager_rule" model="ir.rule">
+            <field name="name">wms.resource supervisor/manager rule</field>
+            <field name="model_id" ref="model_wms_resource"/>
+            <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+            <field name="groups" eval="[(4, ref('wms_core.group_wms_supervisor')), (4, ref('wms_core.group_wms_manager'))]"/>
+        </record>
+    </data>
+</odoo>

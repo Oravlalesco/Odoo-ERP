@@ -1,0 +1,6 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_wms_resource_operator,wms.resource.operator,model_wms_resource,wms_core.group_wms_operator,1,0,0,0
+access_wms_resource_supervisor,wms.resource.supervisor,model_wms_resource,wms_core.group_wms_supervisor,1,0,0,0
+access_wms_resource_manager,wms.resource.manager,model_wms_resource,wms_core.group_wms_manager,1,1,1,1
+access_wms_resource_admin,wms.resource.admin,model_wms_resource,base.group_system,1,1,1,1
+access_resource_resource_admin,resource.resource.admin,resource.model_resource_resource,base.group_system,1,1,1,0

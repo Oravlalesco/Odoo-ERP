@@ -269,3 +269,18 @@ Cada nuevo ADR debe seguir este formato:
 ---
 
 *Documento derivado de la sección 47 del [Plan Maestro](../plan.md). Actualizado v1.1: ADR-011 a ADR-024. v1.2: ADR-025 a ADR-027.*
+
+
+### ADR-028: WMS Operational Resource Satellite on Odoo 19 `resource.resource`
+**Estado: APROBADO**
+**Fecha: 2026-08-29**
+
+**Decisión**: Implementaremos la identidad operacional de los recursos WMS mediante un modelo satélite `wms.resource` (cardinalidad 1:0..1) extendiendo `resource.resource` de Odoo 19, almacenando exactamente los 3 campos funcionales requeridos: `resource_id`, `warehouse_id`, y `company_id`.
+
+**Contexto**: Necesitamos desacoplar la autenticación (`res.users`) de la ejecución física polimórfica (tanto humanos como materiales) en el WMS. `resource.resource` ofrece el polimorfismo, pero carece del contexto de bodega (warehouse) del WMS.
+
+**Consecuencias**:
+- Se preserva la compatibilidad con el ecosistema Odoo (calendarios, hojas de ruta).
+- Se prohíbe inyectar lógicas de negocio al satélite que puedan derivar en drift.
+- Unicidad estricta garantizada por constraints.
+- Métricas operacionales (`resource_utilization` y `assignment_retry_count`) aplican N/A en RES-001 ya que su recolección inicia estrictamente en los subsistemas de Queue/Assignment Engine en fases posteriores.
