@@ -59,7 +59,8 @@ Módulo del dominio de Trabajo Dirigido y Ejecución (Work Execution) para el Wa
 
 ### 5. Capacidades Deliberadamente Diferidas (WORK-004+)
 Conforme al enfoque incremental del proyecto, las siguientes capacidades quedan explícitamente diferidas:
-- Protocolo de atomic claim, lease temporal y heartbeat (WORK-004+, ADR-015, ADR-016).
+- La secuencia ARCH-001 -> RES-001 -> QUEUE-001 es una foundation obligatoria que precede a la implementación de ejecución en WORK-004. Se difieren los motores completos de Queue y Resource (asignación inteligente, scoring), pero sus modelos e identidades canónicas deben existir primero.
+- Protocolo de atomic claim, lease temporal y heartbeat (WORK-004+, ADR-015, ADR-016), ahora dependiendo de queue_id y assigned_resource_id reales.
 - Protocolo ACCEPT como invariante de ejecución del dominio (Work Execution v1.2), con interacción offline acotada a trabajo previamente asignado (ADR-017) y reconciliación por expiración de lease (ADR-025).
 - Detección de expiración de lease, auto-requeue (`RECLAIMABLE -> READY`) y reconciliación obligatoria (`RECONCILIATION_REQUIRED`, ADR-025).
 - Comandos transaccionales idempotentes (ADR-010).
@@ -76,7 +77,7 @@ Conforme al enfoque incremental del proyecto, las siguientes capacidades quedan 
 | **WORK-001** | Work Engine Bootstrap (Scaffold & Dependencies) | ✅ Merged |
 | **WORK-002** | Work Core Data Models (`wms.work`, `wms.work.line`) | ✅ Merged |
 | **WORK-003** | Work Preparation Lifecycle & State Machine | ✅ Merged |
-| **WORK-004+** | Atomic Claim & Lease Protocol (ADR-015, ADR-016) | ⏸ Diferido |
+| **WORK-004+** | Atomic Claim & Lease usando queue_id y assigned_resource_id reales | ⏸ Diferido |
 | **WORK-005+** | Work Execution Commands & ADR-019 Integration | ⏸ Diferido |
 | **WORK-006+** | Lease Expiration, Reclaim & Reconciliation (ADR-025) | ⏸ Diferido |
 | **WORK-007+** | Work Engine API & RF Protocol Integration (ADR-005, ADR-017) | ⏸ Diferido |

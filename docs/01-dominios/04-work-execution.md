@@ -84,10 +84,18 @@ Line 20
 >
 > **ADR-016**: Work transactions are short-lived.
 
+*Alineación Arquitectónica (ARCH-001):*
+- `wms.resource` es la identidad canónica de asignación, NO `res.users`. (`res.users` solo sirve para autenticación).
+- `wms.queue` es la identidad canónica de la cola. Queda prohibido cualquier fallback FIFO global por almacén.
+- El **Work Engine** es el único responsable de la transición atómica `READY -> ASSIGNED` usando `FOR UPDATE SKIP LOCKED`, de persistir `queue_id` y `assigned_resource_id` en `wms.work`, y de gestionar `claim_token`, lease, heartbeat, aceptación y expiración (garantizando CORE-001 y CORE-002).
+- El **Queue/Resource Engine** solo provee las identidades y compatibilidades mínimas.
+- El **Assignment Engine** es responsable del scoring, elección de cola, priorización y retries.
+
 Cuando un operador solicita trabajo, no mantenemos una transacción PostgreSQL abierta durante 5 minutos mientras trabaja. La asignación se hace con un **claim atómico** (transacción corta) y luego un **lease** (arrendamiento temporal) protege la asignación.
 
 | Campo | En inglés | Significado |
 |---|---|---|
+| `queue_id` | Queue | Cola a la que pertenece el trabajo |
 | `claim_token` | Claim Token | Token único generado al momento del claim (UUID) |
 | `assigned_resource_id` | Assigned Resource | Recurso (operador) asignado |
 | `assigned_at` | Assigned At | Timestamp de asignación |

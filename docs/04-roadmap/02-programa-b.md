@@ -31,10 +31,16 @@
 ### Fase 7 — Work Engine
 **Work / Work Lines / templates / Lease Protocol** (ADR-015/016). Claim atómico, heartbeat, lease expiry, RECONCILIATION_REQUIRED para IN_PROGRESS offline (ADR-025). `stock.picking ≠ wms.work` (ADR-002).
 
+*Resecuenciación implementada (ARCH-001):*
+- **ARCH-001**: Alineación arquitectónica y separación de responsabilidades.
+- **RES-001**: Bootstrap y modelo mínimo canónico `wms.resource`.
+- **QUEUE-001**: Bootstrap y modelo mínimo canónico `wms.queue` y compatibilidad mínima.
+- **WORK-004**: Atomic Claim & Lease usando `queue_id` y `assigned_resource_id` reales.
+
 → Detalle completo en [01-dominios/04-work-execution.md](../01-dominios/04-work-execution.md)
 
 ### Fase 8 — Queue & Resource Engine
-**Operarios, equipos, colas, asignación.** Scoring sin locks, atomic claim con retry, race condition handling.
+**Operarios, equipos, colas, asignación.** Separación estricta de responsabilidades: Resource/Queue Core provee identidades canónicas (`wms.resource` y `wms.queue`) y compatibilidades. Assignment Engine asume el scoring, priorización, retries y selección, y debe invocar obligatoriamente la primitive de claim atómico del Work Engine (NO implementa claims directos).
 
 → Detalle completo en [01-dominios/05-resources.md](../01-dominios/05-resources.md)
 
