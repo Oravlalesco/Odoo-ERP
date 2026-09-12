@@ -89,3 +89,10 @@ docker compose run --rm odoo odoo \
 - [Odoo Module Scaffold Skill](../../.agents/skills/odoo-module-scaffold/SKILL.md)
 - [ADR-001 a ADR-027](../docs/05-decisiones/01-adr.md)
 - [Odoo Baseline Registry](../docs/03-plataforma/09-odoo-baseline-registry.md)
+
+
+## Lista de Módulos
+
+| Módulo | Dominio / Descripción |
+|---|---|
+| `wms_resource` | Identidad Operacional (Satélite sobre `resource.resource`) |

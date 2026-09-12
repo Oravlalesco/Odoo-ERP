@@ -317,7 +317,7 @@ Estas no tienen equivalente en Odoo y se construyen completamente:
 |---|---|
 | **Work Engine** | ✅ Persistencia core `wms.work`, `wms.work.line` (WORK-002); lifecycle preparación `DRAFT -> READY -> CANCELLED` (WORK-003); diferidos: `wms.work_type`, `wms.work_class`, `wms.work_template`, y todo el ciclo operacional (transición atómica, FOR UPDATE SKIP LOCKED, claim_token, lease, heartbeat, expiración). |
 | **Queue Engine** | `wms.queue` (identidad canónica y compatibilidad mínima). |
-| **Resource Engine** | `wms.resource` (identidad canónica de asignación), `wms.resource.type`, `wms.certification`. (res.users se reserva solo para autenticación). |
+| **Resource Engine** | `wms.resource` (Extensión vía satélite ADR-028 sobre `resource.resource` para contexto WMS `warehouse_id`), `wms.resource.type`, `wms.certification`. |
 | **Assignment Engine** | Scoring, priorización, retries y elección de cola (se basa en Work Engine para el claim atómico). |
 | **Rule Engine** | `wms.policy`, `wms.policy.condition`, `wms.policy.action` |
 | **RF/Mobile** | `wms.rf.session`, `wms.rf.command` |

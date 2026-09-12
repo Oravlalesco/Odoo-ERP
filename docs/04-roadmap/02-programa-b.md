@@ -131,3 +131,6 @@ Sin el kernel, no se puede construir nada operacional.
 ---
 
 *Documento actualizado en v1.2 para alinear con ADR-011/012/013/018/023/024/025/026.*
+
+### RES-001 - Resource Identity Core
+Base de identidades (satélite `wms.resource` sobre `resource.resource`) requerida estrictamente antes de WORK-004. Desacopla autenticación de ejecución física polimórfica.
