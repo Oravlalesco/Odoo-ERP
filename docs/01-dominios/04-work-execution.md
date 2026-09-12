@@ -244,6 +244,7 @@ sequenceDiagram
     participant PL as Planning Engine
     participant WE as Work Engine
     participant QE as Queue Engine
+    participant AE as Assignment Engine
     participant RE as Resource Engine
     participant OP as Operador (RF)
 
@@ -252,10 +253,12 @@ sequenceDiagram
     WE->>QE: Encolar Work
     QE->>QE: Clasificar por prioridad/deadline
     OP->>RE: "NEXT WORK" (solicitar trabajo)
-    RE->>QE: Buscar trabajo compatible
-    QE->>QE: FOR UPDATE SKIP LOCKED
-    QE-->>RE: Work seleccionado
-    RE-->>OP: Asignar Work
+    RE->>AE: Solicitar trabajo para recurso
+    AE->>QE: Obtener trabajos compatibles (lectura sin lock)
+    QE-->>AE: Lista de candidatos
+    AE->>AE: Calcular scores (SIN locks en DB)
+    AE->>WE: Atomic claim del mejor candidato (FOR UPDATE SKIP LOCKED)
+    WE-->>OP: Work asignado
     OP->>WE: Confirmar líneas
     WE->>WE: Completar Work
 ```
