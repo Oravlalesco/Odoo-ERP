@@ -96,3 +96,4 @@ docker compose run --rm odoo odoo \
 | Módulo | Dominio / Descripción |
 |---|---|
 | `wms_resource` | Identidad Operacional (Satélite sobre `resource.resource`) |
+| `wms_queue` | Identidad Canónica de Colas de Trabajo y Compatibilidad (`wms.queue`) |
