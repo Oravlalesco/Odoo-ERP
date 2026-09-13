@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_wms_queue_operator,wms.queue: operador,model_wms_queue,wms_core.group_wms_operator,1,0,0,0
+access_wms_queue_supervisor,wms.queue: supervisor,model_wms_queue,wms_core.group_wms_supervisor,1,0,0,0
+access_wms_queue_manager,wms.queue: responsable,model_wms_queue,wms_core.group_wms_manager,1,1,1,1
+access_wms_queue_admin,wms.queue: administrador,model_wms_queue,base.group_system,1,1,1,1

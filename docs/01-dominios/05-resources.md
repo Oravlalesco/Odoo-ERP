@@ -236,4 +236,23 @@ Se limita a 3 campos funcionales:
 Restricciones e Invariantes:
 - `resource_id.company_id == company_id` (rechazar compañía nula o divergente).
 - Si `resource_id.resource_type == 'user'`, `resource_id.user_id` es obligatorio.
-- Protección contra drift en `resource.resource.write()` sin `sudo`.
+- Protección contra drift en `resource.resource.write()` con `sudo()` para no ser eludida por record rules.
+
+### Especificación técnica de la cola canónica wms.queue (QUEUE-001)
+
+El modelo `wms.queue` define la identidad canónica de las colas de trabajo en el WMS (`custom_addons/wms_queue`).
+Contiene exactamente 8 campos funcionales:
+- `name`: (Char) Nombre de la cola, requerido y traducible.
+- `code`: (Char) Código operacional único por bodega (`UNIQUE(warehouse_id, code)`), normalizado en mayúsculas sin espacios (máx. 32 caracteres).
+- `warehouse_id`: (Many2one) Enlace al almacén (`stock.warehouse`), requerido con `check_company=True`.
+- `company_id`: (Many2one) Derivado estrictamente de `warehouse_id.company_id`.
+- `priority`: (Integer) Prioridad de atención de 0 a 100 (default 50; mayor valor = mayor prioridad).
+- `active`: (Boolean) Estado activo/inactivo (default True).
+- `zone_ids`: (Many2many) Zonas habilitadas (`wms.zone`), restringidas al mismo almacén de la cola.
+- `allowed_resource_ids`: (Many2many) Recursos habilitados (`wms.resource`), restringidos al mismo almacén y compañía de la cola.
+
+Restricciones e Invariantes:
+- `is_dispatchable()`: Semántica fail-closed; devuelve `False` si `zone_ids` o `allowed_resource_ids` están vacíos o `active` es `False`.
+- Protección contra drift bidireccional en `wms.zone` y `wms.resource` con validación `.sudo().with_context(active_test=False)` cubriendo toda cola (activa o archivada).
+- RBAC: Operator y Supervisor solo lectura; Manager y System Admin control CRUD.
+- Observabilidad (ADR-023): `queue_depth` y `queue_wait_time` aplican N/A como excepción de bootstrap hasta `WORK-004`.

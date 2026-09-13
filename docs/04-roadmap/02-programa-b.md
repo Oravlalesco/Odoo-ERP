@@ -134,3 +134,6 @@ Sin el kernel, no se puede construir nada operacional.
 
 ### RES-001 - Resource Identity Core
 Base de identidades (satélite `wms.resource` sobre `resource.resource`) requerida estrictamente antes de WORK-004. Desacopla autenticación de ejecución física polimórfica.
+
+### QUEUE-001 - WMS Work Queue Core
+Modelo canónico `wms.queue` y compatibilidad mínima requerida antes de WORK-004. Desacopla la definición y priorización de colas de trabajo de la ejecución atómica de claims.
